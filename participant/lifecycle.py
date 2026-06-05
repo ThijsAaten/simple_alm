@@ -170,6 +170,18 @@ class ParticipantConfig:
         Minimum annual pension adjustment (negative = cut), e.g. -0.03.
     solidarity_reserve_rate:
         Fraction of positive adjustment ceded to solidarity reserve each year.
+    career_average_indexation:
+        Revaluation basis for the middelloon denominator of the replacement ratio.
+        "wage"  : revalue each past year's pensionable salary to retirement-year
+                  terms by economy-wide nominal wage growth = realised price
+                  inflation × structural real-wage drift (salary_profile.
+                  real_growth). Excludes the individual's promotion jumps, which
+                  are personal career progression rather than the indexation
+                  series. This is the conventional geindexeerd middelloon and is
+                  the default.
+        "price" : revalue by realised CPI only (price-indexed middelloon).
+        "none"  : raw nominal average (legacy behaviour; understates the
+                  denominator and so overstates the replacement ratio).
     """
 
     entry_age:              int   = 25
@@ -192,6 +204,8 @@ class ParticipantConfig:
     adjustment_smoothing_years: int   = 3
     adjustment_floor:           float = -0.03
     solidarity_reserve_rate:    float = 0.05   # 5% of gains go to solidarity reserve
+
+    career_average_indexation:  str   = "wage"
 
     @property
     def working_years(self) -> int:
@@ -231,10 +245,14 @@ class ParticipantResult:
     pension_at_retirement:
         Initial annual pension set at retirement (nominal €).
     career_avg_salary:
-        Average annual nominal pensionable salary over the working life (middelloon).
+        Career-average pensionable salary, revalued to retirement-year terms
+        per ParticipantConfig.career_average_indexation (the middelloon
+        denominator of the replacement ratio).
+    career_avg_salary_nominal:
+        Raw un-revalued nominal average (transparency / audit trail).
     replacement_ratio:
-        pension_at_retirement / career_avg_salary — the Dutch middelloon benchmark
-        (ambition = 70 %).
+        pension_at_retirement / career_avg_salary — the Dutch middelloon
+        benchmark (ambition = 70 %), on a revalued (geindexeerd) basis.
     solidarity_reserve_path:
         Cumulative contributions to the solidarity reserve.
     """
@@ -247,7 +265,8 @@ class ParticipantResult:
     solidarity_reserve_path: list[float]
     final_pot:             float
     pension_at_retirement: float
-    career_avg_salary:     float   # average nominal pensionable salary over working life
+    career_avg_salary:     float   # career-average pensionable salary, revalued to retirement-year terms
+    career_avg_salary_nominal: float   # raw un-revalued nominal average (transparency)
     replacement_ratio:     float   # pension_at_retirement / career_avg_salary (middelloon)
     pot_exhausted_at:      int | None  # 0-indexed decumulation step when pot first hits 0; None if pot survives
 
@@ -371,7 +390,14 @@ class LifecycleSimulator:
         pot = 0.0
         cumulative_inflation = 0.0
         cumulative_solidarity = 0.0
-        salary_sum = 0.0   # for career-average (middelloon) calculation
+        salary_sum = 0.0   # raw nominal career-average (middelloon) accumulator
+        # Wage-revaluation accumulator: each year's salary is divided by a running
+        # wage index, so that multiplying the total by the retirement-year index
+        # expresses every year's pay in retirement-year terms. See
+        # cfg.career_average_indexation.
+        revalued_salary_sum = 0.0
+        wage_index = 1.0
+        _real_wage_drift = cfg.salary_profile.real_growth
 
         # ----------------------------------------------------------------
         # Accumulation phase
@@ -386,6 +412,7 @@ class LifecycleSimulator:
                 age, cfg.entry_age, cumulative_inflation
             )
             salary_sum += nominal_salary
+            revalued_salary_sum += nominal_salary / wage_index
             contribution = cfg.contribution_rate * nominal_salary
             contribution_path.append(contribution)
             pot += contribution
@@ -409,8 +436,14 @@ class LifecycleSimulator:
             rsp_sub.rebalance()
             lhp_sub.rebalance()
 
-            # Update cumulative CPI
+            # Update cumulative CPI and the wage-revaluation index in lock-step,
+            # so both reflect realised inflation through the same step.
             cumulative_inflation = (1.0 + cumulative_inflation) * (1.0 + state_t.inflation) - 1.0
+            if cfg.career_average_indexation == "wage":
+                wage_index *= (1.0 + state_t.inflation) * (1.0 + _real_wage_drift)
+            elif cfg.career_average_indexation == "price":
+                wage_index *= (1.0 + state_t.inflation)
+            # "none": wage_index stays 1.0, so revalued_salary_sum == salary_sum
 
         # ----------------------------------------------------------------
         # Retirement conversion
@@ -428,8 +461,18 @@ class LifecycleSimulator:
         initial_pension = converted_pot / annuity_f
         pension_at_retirement = initial_pension
 
-        # Career-average salary (middelloon) and replacement ratio
-        career_avg_salary = salary_sum / cfg.working_years if cfg.working_years > 0 else 0.0
+        # Career-average salary (middelloon) and replacement ratio.
+        # career_avg_salary is revalued to retirement-year terms per
+        # cfg.career_average_indexation; career_avg_salary_nominal is the raw
+        # un-revalued average, retained for transparency/audit.
+        wy = cfg.working_years
+        career_avg_salary_nominal = (salary_sum / wy) if wy > 0 else 0.0
+        if wy > 0:
+            # revalued_salary_sum = Sum_t (salary_t / wage_index_t); multiplying by
+            # the retirement-year index expresses each year in retirement-year terms.
+            career_avg_salary = (revalued_salary_sum * wage_index) / wy
+        else:
+            career_avg_salary = 0.0
         replacement_ratio = (initial_pension / career_avg_salary) if career_avg_salary > 0 else 0.0
 
         # CPI at retirement (used to deflate decumulation pension to entry-year €)
@@ -519,6 +562,7 @@ class LifecycleSimulator:
             final_pot             = pot,
             pension_at_retirement = pension_at_retirement,
             career_avg_salary     = career_avg_salary,
+            career_avg_salary_nominal = career_avg_salary_nominal,
             replacement_ratio     = replacement_ratio,
             pot_exhausted_at      = pot_exhausted_at,
         )
