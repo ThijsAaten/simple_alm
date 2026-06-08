@@ -54,6 +54,7 @@ Usage::
 from __future__ import annotations
 
 import copy
+import hashlib
 import math
 from dataclasses import dataclass, field
 
@@ -170,18 +171,6 @@ class ParticipantConfig:
         Minimum annual pension adjustment (negative = cut), e.g. -0.03.
     solidarity_reserve_rate:
         Fraction of positive adjustment ceded to solidarity reserve each year.
-    career_average_indexation:
-        Revaluation basis for the middelloon denominator of the replacement ratio.
-        "wage"  : revalue each past year's pensionable salary to retirement-year
-                  terms by economy-wide nominal wage growth = realised price
-                  inflation × structural real-wage drift (salary_profile.
-                  real_growth). Excludes the individual's promotion jumps, which
-                  are personal career progression rather than the indexation
-                  series. This is the conventional geindexeerd middelloon and is
-                  the default.
-        "price" : revalue by realised CPI only (price-indexed middelloon).
-        "none"  : raw nominal average (legacy behaviour; understates the
-                  denominator and so overstates the replacement ratio).
     """
 
     entry_age:              int   = 25
@@ -205,6 +194,17 @@ class ParticipantConfig:
     adjustment_floor:           float = -0.03
     solidarity_reserve_rate:    float = 0.05   # 5% of gains go to solidarity reserve
 
+    # Career-average (middelloon) revaluation basis for the replacement ratio.
+    #   "wage"  : revalue each past year's pensionable salary to retirement-year
+    #             terms by economy-wide nominal wage growth = realised price
+    #             inflation x structural real-wage drift (salary_profile.
+    #             real_growth). Excludes the individual's promotion jumps, which
+    #             are personal career progression rather than the indexation
+    #             series. This is the conventional geindexeerd middelloon and is
+    #             the default.
+    #   "price" : revalue by realised CPI only (price-indexed middelloon).
+    #   "none"  : raw nominal average (legacy behaviour; understates the
+    #             denominator and so overstates the replacement ratio).
     career_average_indexation:  str   = "wage"
 
     @property
@@ -248,8 +248,6 @@ class ParticipantResult:
         Career-average pensionable salary, revalued to retirement-year terms
         per ParticipantConfig.career_average_indexation (the middelloon
         denominator of the replacement ratio).
-    career_avg_salary_nominal:
-        Raw un-revalued nominal average (transparency / audit trail).
     replacement_ratio:
         pension_at_retirement / career_avg_salary — the Dutch middelloon
         benchmark (ambition = 70 %), on a revalued (geindexeerd) basis.
@@ -265,7 +263,7 @@ class ParticipantResult:
     solidarity_reserve_path: list[float]
     final_pot:             float
     pension_at_retirement: float
-    career_avg_salary:     float   # career-average pensionable salary, revalued to retirement-year terms
+    career_avg_salary:     float   # career-average pensionable salary, revalued to retirement-year terms (see ParticipantConfig.career_average_indexation)
     career_avg_salary_nominal: float   # raw un-revalued nominal average (transparency)
     replacement_ratio:     float   # pension_at_retirement / career_avg_salary (middelloon)
     pot_exhausted_at:      int | None  # 0-indexed decumulation step when pot first hits 0; None if pot survives
@@ -297,6 +295,17 @@ def _annuity_factor(
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _stable_offset(name: str, modulo: int = 100_000) -> int:
+    """Deterministic, process-stable name -> offset.
+
+    Python's built-in hash() is salted per process via PYTHONHASHSEED, so using
+    it here made sleeve RNG seeds differ between runs and broke cross-run
+    reproducibility. A fixed digest keeps the offset identical across processes.
+    """
+    digest = hashlib.sha256(name.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") % modulo
+
+
 def _reseed_specs(specs: list[SleeveSpec], base_seed: int) -> None:
     """Re-seed each sleeve's internal RNG using a name-derived offset.
 
@@ -306,7 +315,7 @@ def _reseed_specs(specs: list[SleeveSpec], base_seed: int) -> None:
     """
     for spec in specs:
         if hasattr(spec.sleeve, "_rng"):
-            sleeve_offset = abs(hash(spec.sleeve.name)) % 100_000
+            sleeve_offset = _stable_offset(spec.sleeve.name)
             spec.sleeve._rng = np.random.default_rng(base_seed + sleeve_offset)
 
 

@@ -30,6 +30,7 @@ A modular Python framework for quantitative ALM modelling. It generates correlat
    - [2.11 Return Models — Mathematical Reference](#211-return-models--mathematical-reference)
    - [2.12 Extension Points](#212-extension-points)
    - [2.13 Participant Lifecycle Model](#213-participant-lifecycle-model-participant)
+   - [2.14 Country Mosaic — Asia Re-anchoring](#214-country-mosaic--asia-re-anchoring-allocations)
 
 ---
 
@@ -357,7 +358,7 @@ simple_alm/
 │   ├── bonds.py         # NominalBondSleeve, CreditBondSleeve
 │   ├── linkers.py       # LinkerSleeve
 │   ├── growth.py        # EquitySleeve, RealAssetSleeve, CommoditySleeve
-│   ├── fx.py            # CurrencySleeve
+│   ├── fx.py            # FXModel, CurrencyParams (13-currency overlay)
 │   └── em_bonds.py      # ChinaGovernmentBondSleeve (extensible EM bond module)
 ├── portfolio/
 │   └── portfolio.py     # SleeveSpec, SubPortfolio, Portfolio
@@ -368,6 +369,19 @@ simple_alm/
 ├── participant/
 │   ├── salary.py        # SalaryProfile
 │   └── lifecycle.py     # CohortAllocation, ParticipantConfig, LifecycleSimulator, ParticipantResult
+├── allocations/
+│   ├── __init__.py      # lazy-export façade
+│   ├── country_inputs.py # COUNTRY_INPUTS: per-market drift/CAPE/FX, sourced from §3.1 Table 1a
+│   ├── mosaic.py        # build_equity_specs(), four canonical allocations (CURRENT/PROPOSED/…)
+│   └── preview.py       # static allocation-preview table (no Monte Carlo)
+├── examples/
+│   └── run_equity_only.py  # CURRENT vs PROPOSED A equity-only validation
+├── tests/
+│   └── test_invariants.py  # 8 load-bearing invariants (pytest or python -m)
+├── docs/
+│   ├── REPRODUCE.md     # one-command reproduce runbook
+│   └── INPUT_PROVENANCE.md # maps every input figure to its §3.1/§13.6 source
+├── reproduce_participant.py # driver: all four allocations on shared paths
 ├── main.py              # Fund-level ALM demo
 ├── main_participant.py  # Dutch WTP individual lifecycle demo
 └── requirements.txt
@@ -1594,6 +1608,7 @@ Full specification for one participant's lifecycle.
 | `adjustment_smoothing_years` | 3 | Years over which pension adjustments are spread |
 | `adjustment_floor` | −0.03 | Minimum annual pension adjustment (−3 %) |
 | `solidarity_reserve_rate` | 0.05 | Fraction of upward adjustments ceded to solidarity pool |
+| `career_average_indexation` | `"wage"` | Middelloon revaluation basis: `"wage"` (CPI × real-wage drift — *geïndexeerd middelloon*, default), `"price"` (CPI only), `"none"` (raw nominal average — legacy, overstates RR) |
 
 Both `lhp_specs` and `rsp_specs` must be provided (non-empty) before calling `run()`.  Sleeve specs are **deepcopied** at the start of each `run()` call so that stateful sleeve properties (CAPE, cap-rate, PPP gap) do not leak between scenarios.
 
@@ -1620,7 +1635,7 @@ print(f"Replacement ratio : {result.replacement_ratio:.1%}")
 print(f"Pot at retirement : €{result.pot_path[43]:,.0f}")
 ```
 
-The optional `run_seed` parameter re-seeds every sleeve's internal RNG after deepcopy using a name-derived offset, so that repeated calls on the same deterministic macro path (e.g. stress scenario replications) produce distinct idiosyncratic draws while remaining reproducible.
+The optional `run_seed` parameter re-seeds every sleeve's internal RNG after deepcopy using a name-derived offset computed with a **fixed SHA-256 digest** (`_stable_offset()`), ensuring bit-for-bit reproducibility across processes and machines regardless of `PYTHONHASHSEED`. (Earlier versions used Python's built-in `hash()`, which is process-salted and caused ~0.3 % run-to-run drift.)
 
 **`ParticipantResult` fields:**
 
@@ -1634,8 +1649,9 @@ The optional `run_seed` parameter re-seeds every sleeve's internal RNG after dee
 | `solidarity_reserve_path` | Cumulative solidarity pool contributions (€) |
 | `final_pot` | Residual pot at `death_age` |
 | `pension_at_retirement` | Initial annual pension set at the point of retirement |
-| `career_avg_salary` | Average annual nominal salary over the working life (Dutch *middelloon*) |
-| `replacement_ratio` | `pension_at_retirement / career_avg_salary` — the Dutch 70 % ambition benchmark |
+| `career_avg_salary` | Career-average pensionable salary revalued to retirement-year terms per `career_average_indexation` (the *geïndexeerd middelloon* denominator) |
+| `career_avg_salary_nominal` | Raw un-revalued nominal average — retained for audit / transparency |
+| `replacement_ratio` | `pension_at_retirement / career_avg_salary` — the Dutch 70 % ambition benchmark, on a wage-indexed basis by default |
 | `pot_exhausted_at` | 0-indexed decumulation step when pot first hits zero; `None` if pot survives to `death_age` |
 
 ---
@@ -1674,11 +1690,10 @@ The default RSP composition (intra-RSP weights):
 
 | Sleeve | Weight | Key return driver |
 | ------ | ------ | ----------------- |
-| GlobalEquity | 40 % | CAPE mean-reversion + macro betas |
-| RealAssets | 25 % | Cap-rate income + inflation pass-through |
-| IG Credit | 15 % | Carry + Poisson spread jumps |
-| Commodities | 10 % | Collateral + inflation deviation + geo jumps |
-| USD_FX | 10 % | Carry + dollar-debasement drift + PPP reversion |
+| GlobalEquity | 50 % | CAPE mean-reversion + macro betas + FX overlay (USD 35 %, JPY 7 %, GBP 5 %, CNY 3 %, …) |
+| RealAssets | 25 % | Cap-rate income + inflation pass-through + FX overlay (USD 15 %) |
+| IG Credit | 15 % | Carry + Poisson spread jumps + FX overlay (USD 5 %) |
+| Commodities | 10 % | Collateral + inflation deviation + geo jumps + FX overlay (USD 40 %) |
 
 The default LHP composition (intra-LHP weights):
 
@@ -1705,3 +1720,85 @@ Rising real rates → smaller annuity factor → higher pension per € of pot; 
 **Middelloon replacement ratio:** `RR = P₀ / career_avg_salary`  (Dutch 70 % ambition benchmark)
 
 **Solidarity reserve cession:** `s_t = ρ · max(0, ΔP/P) · P_t`,  `ρ = solidarity_reserve_rate`
+
+---
+
+## 2.14 Country Mosaic — Asia Re-anchoring (`allocations/`)
+
+The `allocations/` package implements a **bottom-up, country-level equity sleeve** that replaces the single cap-weighted `GlobalEquity` block with per-country `EquitySleeve` instances, each carrying its own §3.1 drift/CAPE calibration and FX overlay exposure.
+
+### Motivation
+
+A EUR-based pension fund that holds MSCI-ACWI-like equities (~60 % USA) has concentrated exposure to US valuation risk (CAPE ~40 vs fair value ~27.5) and dollar-debasement drift. The Asia re-anchoring proposal tilts toward markets that are demographically young, institutionally reforming, and structurally cheap on CAPE terms — while explicitly capping China at 6 % (governance discount) and leaving Asian FX unhedged to capture the PPP undervaluation tailwind documented in the FX model.
+
+### `country_inputs.py` — per-market calibration
+
+Each country entry provides the inputs to `EquitySleeve` and the FXModel:
+
+| Market | drift (§3.1 r_nom) | CAPE now | CAPE anchor | FX key | Data |
+| --- | ---: | ---: | ---: | --- | --- |
+| USA | 4.0 % | 40.1 | 27.5 | USD | §3.1 Table 1a |
+| Europe | 7.0 % | 17.0 | 17.0 | — (EUR base) | §3.1 Table 1a |
+| Japan | 6.0 % | 24.0 | 22.0 | JPY | §3.1; ROE-convergence upside |
+| China | 8.4 % | 11.0 | 14.0 | CNY | §3.1 |
+| India | 6.4 % | 28.0 | 24.0 | INR | §3.1 |
+| Korea | 7.1 % | 12.0 | 16.0 | KRW | §3.1; Value-Up re-rating |
+| Taiwan | 5.6 % | 21.0 | 19.0 | TWD | §3.1 |
+| Indonesia | 8.8 % | 17.0 | 18.0 | THB* | §3.1 |
+| Vietnam† | 9.0 % | 13.0 | 16.0 | THB* | Proxy — illustrative |
+| Singapore† | 6.0 % | 14.0 | 15.0 | SGD | Proxy — illustrative |
+
+`*` FXModel has no IDR or VND; THB is used as the nearest managed-float ASEAN proxy.
+`†` Proxy markets (`real=False`); not in §3.1. Use `proxy_markets()` to list them.
+
+`drift` is the **local-currency** nominal expected return. FX appreciation is handled separately by the FXModel overlay (the `fx` key), never folded into `drift`.
+
+### `mosaic.py` — sleeve builder and canonical allocations
+
+```python
+from allocations import build_equity_specs, PROPOSED_EQUITY
+
+# Returns list[SleeveSpec] — drop straight into the RSP equity block
+specs = build_equity_specs(PROPOSED_EQUITY, seed=1, hedge_developed=0.5)
+```
+
+`hedge_developed=0.5` hedges 50 % of USD exposure; Asian FX is left fully unhedged (the PPP-undervaluation thesis). JPY is 85 % unhedged (deeply undervalued, BOJ normalisation).
+
+**Four canonical allocations:**
+
+| Name | Asia (incl. Japan) | China | USA | Notes |
+| --- | ---: | ---: | ---: | --- |
+| `CURRENT_EQUITY` | ~25 % | 5.5 % | 60 % | MSCI ACWI-like benchmark |
+| `PROPOSED_EQUITY` | ~40 % | 6.0 % | 37 % | Article §13.6 anchor |
+| `PROPOSED_CONSERVATIVE` | ~35 % | 5.0 % | 42 % | Reviewer robustness check |
+| `PROPOSED_TIGHT_CHINA` | ~40 % | 3.0 % | 36 % | China cap tightened to 3 % |
+
+### Running the comparison
+
+```bash
+# All four allocations on shared macro paths (paired comparison):
+python reproduce_participant.py
+
+# Equity-only Current vs Proposed A validation:
+python -m examples.run_equity_only
+
+# Static allocation preview (no Monte Carlo):
+python -m allocations.preview
+
+# Invariant tests:
+pytest tests/                        # or: python -m tests.test_invariants
+```
+
+### Wiring into the RSP
+
+`examples/run_equity_only.py` shows the standard pattern: swap only the equity block, hold real assets / credit / commodities fixed.
+
+```python
+from allocations import build_equity_specs, PROPOSED_EQUITY
+from examples.run_equity_only import config_with
+
+cfg = config_with(PROPOSED_EQUITY)   # ParticipantConfig with mosaic equity
+results = sim.run(path, run_seed=42)
+```
+
+See `docs/REPRODUCE.md` for a full reproduce runbook and `docs/INPUT_PROVENANCE.md` for the source mapping of every input figure.
