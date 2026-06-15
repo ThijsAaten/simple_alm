@@ -158,3 +158,47 @@ class ChinaGovernmentBondSleeve(AssetSleeve):
         self._cgb_yield = max(0.0, self._cgb_yield + d_cgb)
 
         return carry + price_chg
+
+
+class GovernmentBondSleeve(ChinaGovernmentBondSleeve):
+    """Generic sovereign government-bond sleeve.
+
+    Generalises the CGB Ornstein-Uhlenbeck + global-pass-through mechanics to
+    ANY sovereign, developed or emerging. The key lever is ``global_rate_beta``:
+    it is the sensitivity of this sovereign's yield to changes in the EUR long
+    rate, i.e. the degree to which EUR/global rate moves (including a EUR
+    financial-repression episode) are imported into this curve.
+
+      * HIGH beta  -> tracks EUR rates closely (repression passes through).
+      * LOW beta   -> a decoupled, *unrepressed* curve that follows its own
+                      fair real yield (the §8.7 decoupling thesis).
+
+    ``fx_key`` sets the (typically unhedged) currency exposure for a EUR-base
+    investor; leave None for a EUR-denominated sleeve. Where the FX model lacks
+    a currency (e.g. IDR, NZD), pass the documented proxy key (THB, AUD).
+    """
+
+    def __init__(
+        self,
+        name:             str,
+        duration:         float        = 8.0,
+        initial_yield:    float        = 0.045,
+        long_run_yield:   float        = 0.045,
+        yield_reversion:  float        = 0.20,
+        global_rate_beta: float        = 0.15,
+        idio_yield_vol:   float        = 0.006,
+        fx_key:           str | None   = None,
+        fx_exposure:      float        = 1.0,
+        maturity:         float | None = None,
+        convexity:        float | None = None,
+        lambda_:          float        = 5.0,
+        seed:             int | None   = None,
+    ) -> None:
+        super().__init__(
+            name=name, duration=duration, maturity=maturity, convexity=convexity,
+            initial_yield=initial_yield, long_run_yield=long_run_yield,
+            yield_reversion=yield_reversion, global_rate_beta=global_rate_beta,
+            idio_yield_vol=idio_yield_vol, lambda_=lambda_, seed=seed,
+        )
+        if fx_key is not None:
+            self.fx_exposures = {fx_key: fx_exposure}

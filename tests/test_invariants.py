@@ -93,6 +93,48 @@ def test_wage_indexation_lifts_the_denominator():
     assert 0.40 < np.median(rr) < 1.30, f"median RR {np.median(rr):.2f} off conventional scale"
 
 
+def test_overlay_weights_and_eur_residual():
+    from allocations import build_overlay_specs
+    assert abs(sum(s.weight for s in build_overlay_specs()) - 0.20) < 1e-9
+    assert abs(sum(s.weight for s in build_overlay_specs(china_weight=0.02)) - 0.22) < 1e-9
+
+
+def test_overlay_fx_keys_exist_in_fx_model():
+    from allocations import build_overlay_specs
+    supported = set(FXModel.default().currencies)
+    for s in build_overlay_specs(china_weight=0.05):   # include China line
+        for cur in s.sleeve.fx_exposures:
+            assert cur in supported, f"overlay FX key {cur!r} not in FXModel"
+
+
+def test_china_overlay_defaults_to_zero():
+    from allocations import build_overlay_specs
+    names = {s.sleeve.name for s in build_overlay_specs()}
+    assert "China" not in names                       # off by default (a dial)
+    assert "China" in {s.sleeve.name for s in build_overlay_specs(china_weight=0.02)}
+
+
+def test_low_beta_govvie_decouples_from_eur_rates():
+    # The decoupling dial: under an identical EUR-rate drop, a HIGH-beta sleeve's
+    # return responds more than a LOW-beta one (idio noise switched off).
+    from scenarios.engine import MacroState
+    from assets.em_bonds import GovernmentBondSleeve
+
+    def state(long_rate):
+        return MacroState(short_rate=long_rate, long_rate=long_rate, real_rate=0.01,
+                          inflation=0.02, growth=0.02, credit_spread=0.01, curvature=0.0)
+
+    def ret(beta, dy):
+        sl = GovernmentBondSleeve("X", long_run_yield=0.05, initial_yield=0.05,
+                                  global_rate_beta=beta, idio_yield_vol=0.0, seed=1)
+        return sl.period_return(state(0.03), state(0.03 + dy))
+
+    drop = -0.01
+    hi = ret(0.90, drop) - ret(0.90, 0.0)
+    lo = ret(0.10, drop) - ret(0.10, 0.0)
+    assert abs(hi) > abs(lo), "high-beta sleeve should respond more to an EUR-rate move"
+
+
 def test_within_process_reproducibility():
     paths = mp.build_scenario_engine(mp.build_initial_state()).simulate(
         n_steps=mp.N_STEPS, n_scenarios=40)

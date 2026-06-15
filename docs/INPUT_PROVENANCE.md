@@ -73,3 +73,38 @@ flagged in their own captions and reproduced here for completeness:
 - **Exhibit 5** (country-level frontier, §13.8) — uses the more bullish §5.1
   re-rating inputs (Korea 10 / China 9 / Taiwan 8 / India 7.5%), explicitly
   distinct from the conservative §3.1 CAPE figures above.
+
+## Bond-side inputs (LDI / liability-hedging overlay)
+
+The LHP holds a EUR-denominated core (the existing nominal + linker + cash hedge)
+plus an unhedged overlay of unrepressed/managed sovereigns. `long_run_yield` is the
+market's ~mid-2026 nominal 10-year yield; `global_rate_beta` is the EUR-rate
+pass-through (LOW = decoupled / unrepressed). Source: central-bank policy
+statements and 10-year benchmark yields, mid-June 2026.
+
+| Sovereign | Block | long_run_yield | β (pass-through) | FX key | Note |
+|---|:--|---:|---:|:--|:--|
+| Australia | dev | 4.8% | 0.20 | AUD | AAA, commodity exporter |
+| New Zealand | dev | 4.5% | 0.20 | AUD* | AA+, commodity exporter |
+| Indonesia | em | 6.6% | 0.10 | THB* | ~4% real yield |
+| India | em | 6.9% | 0.10 | INR | ~4% real yield |
+| Korea | em | 3.7% | 0.15 | KRW | ~1.5% real yield |
+| China (CGB) | managed | 1.8% | 0.10 | CNY | capped dial, default 0% |
+
+`*` `FXModel` lacks NZD and IDR; **AUD** proxies NZD and **THB** proxies IDR
+(documented in `bond_inputs.py`). All overlay sleeves are held **unhedged** —
+FX-hedging back to EUR would, by covered-interest parity, reintroduce the
+(possibly repressed) EUR base rate.
+
+CGB sits in its own `managed` block, explicitly **not** claimed as unrepressed
+(the curve is managed and capital-controlled). It is included as a capped dial on
+the rationale that over the past decade Bunds and USTs delivered roughly flat-to-
+negative real returns while CGB broadly kept pace with inflation, and China is
+visibly working to make the 10-year CGB a credible real store of value.
+
+### Repression scenario (Napier thesis)
+The financial-repression overlay (`examples/run_attribution.py`) pins the EUR real
+rate to **−1.5%** and inflation to **3.5%** over a sustained ~12-year window, with
+foreign curves left unrepressed via their low `global_rate_beta`. Calibration is an
+explicit, falsifiable assumption — the result is reported as a conditional world
+alongside the no-repression baseline, never blended into a single probability.

@@ -388,7 +388,10 @@ class LifecycleSimulator:
         fx_model = FXModel.default(seed=fx_seed)
 
         rsp_sub = SubPortfolio(rsp_specs, initial_value=1.0, fx_model=fx_model)
-        lhp_sub = SubPortfolio(lhp_specs, initial_value=1.0)
+        # LHP also takes the FX model: the liability hedge may now hold unhedged
+        # foreign-currency govvies (unrepressed-curve sleeves). EUR-only sleeves
+        # carry no fx_exposures, so this is a no-op for them.
+        lhp_sub = SubPortfolio(lhp_specs, initial_value=1.0, fx_model=fx_model)
 
         pot_path:          list[float] = [0.0] * (n_total + 1)
         contribution_path: list[float] = []

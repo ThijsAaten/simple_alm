@@ -26,6 +26,8 @@ __all__ = [
     "build_equity_specs", "asia_weight",
     "CURRENT_EQUITY", "PROPOSED_EQUITY",
     "PROPOSED_CONSERVATIVE", "PROPOSED_TIGHT_CHINA",
+    # bond side
+    "BOND_INPUTS", "build_overlay_specs", "DEVELOPED", "EM", "MANAGED",
 ]
 
 # name -> submodule that defines it
@@ -35,6 +37,8 @@ _SOURCES = {
     "build_equity_specs": "mosaic", "asia_weight": "mosaic",
     "CURRENT_EQUITY": "mosaic", "PROPOSED_EQUITY": "mosaic",
     "PROPOSED_CONSERVATIVE": "mosaic", "PROPOSED_TIGHT_CHINA": "mosaic",
+    "BOND_INPUTS": "bond_inputs", "build_overlay_specs": "bond_inputs",
+    "DEVELOPED": "bond_inputs", "EM": "bond_inputs", "MANAGED": "bond_inputs",
 }
 
 

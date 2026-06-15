@@ -29,6 +29,12 @@ shared set of macro paths so the comparison is paired. Proposed A and D land
 materially above Current; D ≈ A demonstrates that the tight China cap costs
 almost nothing in expected wealth.
 
+To run the bond-side nested attribution under baseline vs EUR financial repression (Option C):
+
+```bash
+python -m examples.run_attribution        # baseline vs repression, all four attribution steps
+```
+
 To inspect just the equity-only Current-vs-A validation:
 
 ```bash
