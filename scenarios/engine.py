@@ -302,7 +302,21 @@ def _default_sigma() -> np.ndarray:
     reason a euro one does. Its volatility (2.0%) sits below euro growth's
     (2.5%): a diversified world aggregate is less volatile than any one region.
     """
-    vols = np.array([0.008, 0.012, 0.010, 0.008, 0.025, 0.006, 0.008, 0.020])
+    # V-M3 recalibration (2026-08-22). The previous vector had long_rate 1.2%,
+    # real_rate 1.0% and credit_spread 0.6%. With phi = 0.80 the annual CHANGE
+    # sd of an AR(1) is sigma*sqrt(2/(1+phi)) ~ 1.05*sigma, so a 120bp innovation
+    # put ~125bp/yr of yield change through a D=20 sleeve and produced 22.7%
+    # return volatility. Realised annual changes in 10y Bund yields 1999-2025
+    # have an sd of ~85bp including 2022 and ~70bp without it, and 30y yields
+    # move less; the level factor here is the infinite-maturity limit, so 70bp
+    # gives the 25y Nelson-Siegel yield an annual-change sd of ~69bp. Real
+    # yields (thinner record) are set at 65bp; euro IG OAS annual changes of
+    # ~50bp are reproduced by a 45bp innovation at phi = 0.65. Persistence was
+    # NOT changed: it governs the level distribution, not the change sd that
+    # bond returns load on (diagnosed, not assumed - see
+    # output/bond_volatility_summary.md). Status: judgement, pending a
+    # Bloomberg check of GDBR10/GDBR30 annual changes.
+    vols = np.array([0.008, 0.0070, 0.0065, 0.008, 0.025, 0.0045, 0.008, 0.020])
     corr = np.array([
         #  r_s    r_l    r_r    π      g      cs     C      G
         [ 1.00,  0.70,  0.50,  0.20, -0.10,  0.20, -0.15, -0.08],  # short_rate

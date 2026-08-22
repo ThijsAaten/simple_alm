@@ -1,6 +1,6 @@
 # Test suite coverage
 
-`tests/test_invariants.py` — **43 tests, all passing** at commit `0adf3bb`, 2026-08-22.
+`tests/test_invariants.py` — **46 tests, all passing** at the V-M3 commit, 2026-08-22 (43 at `0adf3bb`).
 Run with `pytest tests/` or `python -m tests.test_invariants`.
 
 This document exists to answer one question: **will the next change be caught by the suite,
@@ -70,7 +70,10 @@ Categories used below:
 | `test_macro_state_has_global_growth_and_roundtrips` | 8-wide state, `global_growth` at index `[7]`, array round-trip | Invariant |
 | `test_var_simulated_moments_match_the_calibration` | Simulated means vs X̄ (±25bp) and simulated sd vs the analytic unconditional sd (±20%) | **Statistical** |
 | `test_no_state_variable_explodes_or_degenerates_over_the_horizon` | Cross-sectional spread neither collapses nor blows up between year 20 and 65 | **Statistical** |
-| `test_credit_spread_floor_does_not_bind_more_than_expected` | Pins the floor-binding share below 15% (currently 10.1%) | **Statistical** (V-M4) |
+| `test_credit_spread_floor_does_not_bind_more_than_expected` | Pins the floor-binding share below 15% (currently 7.1%) | **Statistical** (V-M4) |
+| `test_var_long_rate_annual_change_volatility_is_in_band` | Analytic annual-change sd of `long_rate` from (Φ, Σ) in 60–90bp | **Regression guard** (V-M3) |
+| `test_bond_sleeve_volatilities_are_in_plausible_band` | Simulated LongGovt / ILG / IG_Credit annual vol inside chosen bands | **Statistical** (V-M3) |
+| `test_bond_sleeve_single_year_returns_are_bounded` | No bond sleeve year outside (−55%, +110%); LongGovt years beyond ±25% under 13% | **Statistical** (V-M7) |
 
 ### Asset sleeves — behavioural
 
@@ -129,11 +132,11 @@ were added on 2026-08-22). **Seven of the twelve are guarded. Five are not.**
 | V-C3 | Critical | `test_simulated_cross_country_equity_correlation_is_plausible`, `test_simulated_equity_total_volatility_matches_target`, `test_equity_market_factor_has_its_calibrated_moments` | ✅ **RESOLVED and guarded** (2026-08-22). Correlation floor asserted at 0.20 per pair and a [0.40, 0.65] band on the mean; volatility pinned externally |
 | V-M1 | Major | `test_sleeve_rng_streams_are_distinct_across_scenarios` | ✅ Guarded |
 | V-M2 | Major | — | ❌ **NOT GUARDED.** The construction-seed collisions (Europe = RealAssets = 44) are *masked* in the participant path because reseeding now overwrites them. Any caller that builds sleeves without `_run_batch` — including `main.py` — still gets colliding streams, and no test looks at construction seeds |
-| V-M3 | Major | — | ❌ **NOT GUARDED, deliberately.** Bond volatility of 22.7% against a plausible 10–15% is a calibration judgement, not an invariant. A loose upper bound could be asserted; I chose not to, because picking the bound would be making the calibration decision the report explicitly leaves open |
-| V-M4 | Major | `test_credit_spread_floor_does_not_bind_more_than_expected` | ✅ Guarded — pinned below 15%, currently 10.1% |
+| V-M3 | Major | `test_var_long_rate_annual_change_volatility_is_in_band`, `test_bond_sleeve_volatilities_are_in_plausible_band` | ✅ Guarded since the 2026-08-22 recalibration — analytic 60–90bp band on Φ,Σ and simulated sleeve bands LongGovt 10–17%, ILG 9–16%, IG_Credit 5–8.5% |
+| V-M4 | Major | `test_credit_spread_floor_does_not_bind_more_than_expected` | ✅ Guarded — pinned below 15%, currently 7.1% (10.1% before V-M3) |
 | V-M5 | Major | *indirect only* | ⚠️ **Partially.** Understated seed dispersion was a consequence of V-C1, so fixing V-C1 fixes it. But nothing asserts that reported standard deviations are computed over genuinely independent draws — a future defect that re-froze any stochastic input would understate uncertainty again without failing any test |
 | V-M6 | Major | — | ❌ **NOT GUARDED.** No test checks that a calibrated input appears in `INPUT_PROVENANCE.md`. This is mechanisable — a test could walk `COUNTRY_INPUTS`, `BOND_INPUTS` and `_DEFAULT_CURRENCIES` and assert each key is named in the doc — and it is the cheapest missing guard in this list |
-| V-M7 | Major | — | ❌ **NOT GUARDED.** Nothing bounds single-year sleeve returns, so the ±50–63% swings at the `repress()` window boundaries would pass silently |
+| V-M7 | Major | `test_bond_sleeve_single_year_returns_are_bounded` | ⚠️ Partly — bounds single-year sleeve returns on *baseline* paths. The `repress()` boundary itself is not tested because it is a design choice still open; once a ramp is built, add a test on repressed paths |
 | V-P1 | Major | `test_portfolio_gives_its_lhp_an_fx_model`, `test_subportfolio_without_fx_model_refuses_exposed_sleeves` | ✅ **RESOLVED and guarded** (2026-08-22). The second guard is general — it catches any FX-exposed sleeve in any sub-portfolio lacking a model |
 | V-R1 | Major | `test_every_engine_in_the_codebase_can_take_a_step` | ✅ **RESOLVED and guarded** (2026-08-22). Verified to fail with the original raw `ValueError` when the guard is removed |
 

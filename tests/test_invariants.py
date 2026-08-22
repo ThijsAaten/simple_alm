@@ -927,3 +927,70 @@ if __name__ == "__main__":
             print(f"FAIL  {fn.__name__}: {e}")
     print(f"\n{len(fns)-failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ---------------------------------------------------------------------------
+# V-M3 / V-M7 guards (added 2026-08-22 with the bond-volatility recalibration)
+# ---------------------------------------------------------------------------
+
+def _simulate_bond_sleeve_returns(n_scenarios=300, n_steps=40, burn=10, seed=11):
+    """Annual returns of the three bond sleeves as configured in main_participant,
+    on baseline paths, after a burn-in so the state is near its unconditional
+    distribution. Returns dict name -> 1-D array."""
+    from assets.bonds import NominalBondSleeve, CreditBondSleeve
+    from assets.linkers import LinkerSleeve
+    paths = mp.build_scenario_engine(mp.build_initial_state(), seed=seed).simulate(
+        n_steps=n_steps, n_scenarios=n_scenarios)
+    sleeves = {
+        "LongGovt":  NominalBondSleeve("LongGovt", duration=20.0, maturity=25.0),
+        "ILG":       LinkerSleeve("ILG", real_duration=18.0, maturity=22.0),
+        "IG_Credit": CreditBondSleeve("IG_Credit", duration=7.0, maturity=8.0, seed=seed + 4),
+    }
+    out = {k: [] for k in sleeves}
+    for p in paths:
+        for t in range(burn, n_steps):
+            for k, s in sleeves.items():
+                out[k].append(s.period_return(p[t], p[t + 1], 1.0))
+    return {k: np.asarray(v) for k, v in out.items()}
+
+
+def test_var_long_rate_annual_change_volatility_is_in_band():
+    """V-M3, the parameter itself. The annual-CHANGE sd of long_rate implied by
+    (Φ, Σ) — the quantity a duration sleeve actually loads on — must sit in the
+    60–90bp band set from realised Bund history. Analytic, so independent of any
+    simulation noise. Note persistence barely moves this (var Δx = 2σ²/(1+φ));
+    if this fails, look at Σ, not Φ."""
+    from scenarios.engine import VARParams, MacroState
+    p = VARParams()
+    V = p.sigma.copy()
+    for _ in range(500):
+        V = p.phi @ V @ p.phi.T + p.sigma
+    DV = 2 * V - p.phi @ V - V @ p.phi.T
+    i = MacroState._FIELDS.index("long_rate")
+    sd_change = float(np.sqrt(DV[i, i]))
+    assert 0.0060 <= sd_change <= 0.0090, (
+        f"long_rate annual-change sd {sd_change*1e4:.0f}bp outside 60–90bp band")
+
+
+def test_bond_sleeve_volatilities_are_in_plausible_band():
+    """V-M3 guard. Bands chosen with the 2026-08-22 recalibration (see
+    docs/VALIDATION_REPORT.md). Pre-fix values were 22.7% / 18.9% / 9.8%."""
+    R = _simulate_bond_sleeve_returns()
+    bands = {"LongGovt": (0.10, 0.17), "ILG": (0.09, 0.16), "IG_Credit": (0.05, 0.085)}
+    for k, (lo, hi) in bands.items():
+        v = float(R[k].std())
+        assert lo <= v <= hi, f"{k}: simulated annual vol {v:.1%} outside [{lo:.0%}, {hi:.0%}]"
+
+
+def test_bond_sleeve_single_year_returns_are_bounded():
+    """V-M7 gap. On baseline paths no bond sleeve should post a single-year
+    return beyond the bound, and years beyond ±25% must be rare. The bound is
+    loose because the fixed-duration/D²-convexity sleeve legitimately overstates
+    moves from high-yield starting points (recorded as a design item)."""
+    R = _simulate_bond_sleeve_returns()
+    for k, arr in R.items():
+        assert arr.min() > -0.55 and arr.max() < 1.10, (
+            f"{k}: single-year return range [{arr.min():+.0%}, {arr.max():+.0%}]")
+    share = float((np.abs(R["LongGovt"]) > 0.25).mean())
+    # 14% sd implies ~8% beyond ±1.75σ on Gaussian grounds; convexity skew adds ~2pp.
+    assert share < 0.13, f"LongGovt: {share:.1%} of years beyond ±25% (pre-fix: 28%)"

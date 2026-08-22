@@ -29,11 +29,11 @@ silently.
 | V-C3 | **Critical** | Cross-country equity correlation is +0.01; the mosaic's diversification benefit is an artefact | **RESOLVED 2026-08-22** | **Yes — corrected; see below** |
 | V-M1 | Major | Sleeve RNG streams collided across scenarios (Taiwan ≡ RealAssets at lag 1) | **Yes** | Yes |
 | V-M2 | Major | Construction seeds collide (Europe = RealAssets = 44; Japan = Commodities = 45) | Partly | No (masked by V-C1 fix) |
-| V-M3 | Major | Bond return volatility ~1.5–2× plausible (LongGovt 22.7% vs 10–15%) | No — calibration | Yes, if corrected |
-| V-M4 | Major | `credit_spread` floor binds on 10.1% of steps; simulated process ≠ calibrated process | No — flagged | Marginal |
+| V-M3 | Major | Bond return volatility ~1.5–2× plausible (LongGovt 22.7% vs 10–15%) | **RESOLVED 2026-08-22** — Σ recalibrated; LongGovt 14.3%, ILG 13.3%, IG_Credit 7.7% | **Yes — corrected; see below** |
+| V-M4 | Major | `credit_spread` floor binds on 10.1% of steps; simulated process ≠ calibrated process | Partly — 7.1% after V-M3 narrowed the spread innovation | Marginal |
 | V-M5 | Major | Reported seed-to-seed standard deviations were themselves understated | **Yes** (via V-C1) | Yes — all stated uncertainties |
 | V-M6 | Major | Provenance doc omits the VAR, the FX non-loading block, and the equity betas | No — documentation | No |
-| V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — design | Yes, if corrected |
+| V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — **re-measured after V-M3: now material, not a symptom** (+64% / −30% mean vs 11% baseline sd) | Yes, if corrected |
 | V-P1 | Major | `Portfolio` built its LHP with no FX model; LHP currency returns silently dropped to zero | **RESOLVED 2026-08-22** | No (no exhibit uses that path) |
 | V-R1 | Major | `scenarios/regimes.py` carried 7-variable calibrations against the 8-variable state | **RESOLVED 2026-08-22** | No (unreferenced) |
 | **V-F1** | **Major** | The `b_usd` column behind 24 of the 36 FX loadings cannot be reproduced from the committed data | No — flagged, loadings unchanged | **No — measured, all changes within seed noise** |
@@ -208,21 +208,45 @@ fix reseeds everything, but it remains live for any caller that builds sleeves w
 `_run_batch` — including `main.py`. **Not fixed** (changing seed constants is a numbers
 change with no upside once reseeding works); recorded so it is not rediscovered.
 
-**V-M3 — bond volatility is 1.5–2× plausible.** Simulated annual return volatilities
-against market reality:
+**V-M3 — bond volatility is 1.5–2× plausible. RESOLVED 2026-08-22.** Simulated annual
+return volatilities against market reality, before and after:
 
-| Sleeve | simulated | plausible | max single-year |
-|---|---:|---|---:|
-| LongGovt (D=20) | **22.7%** | 10–15% | 127% |
-| ILG (D=18) | **18.9%** | 10–14% | 91% |
-| IG_Credit (D=7) | 9.8% | 5–7% | 44% |
-| Equity Europe | 17.3% | 15–18% ✓ | 78% |
+| Sleeve | before | after | plausible | max single-year before → after |
+|---|---:|---:|---|---:|
+| LongGovt (D=20) | 22.7% | **14.3%** | 10–15% | 127% → 89% |
+| ILG (D=18) | 18.9% | **13.3%** | 10–14% | 91% → 78% |
+| IG_Credit (D=7) | 9.8% | **7.7%** | 5–7% | 44% → 39% |
+| Equity Europe | 17.3% | 17.3% | 15–18% ✓ | unchanged |
 
-Equity is well calibrated; the bond block is not. Root cause is the VAR's `long_rate`
-innovation volatility (1.2%/yr, unconditional 2.24%) combined with 20-year duration. This
-inflates LHP risk, widens the pot distribution, and inflates the absolute value of the
-CGB volatility-reduction argument. **Not fixed** — recalibrating Σ is a design decision
-affecting every number.
+**Diagnosis, measured rather than assumed.** Variance decomposition of the LongGovt return
+on baseline paths: the level term (−D·Δ`long_rate`) accounted for 106% of variance, carry 3%,
+convexity 2%, slope/curvature −11% (the 25y Nelson-Siegel yield moves slightly less than the
+level factor). The duration mapping is therefore *not* the error. Nor is persistence: for an
+AR(1) the annual-change variance is 2σ²/(1+φ), so with φ = 0.80 the change sd (125bp) is
+almost the innovation sd (120bp) — lowering φ would narrow the *level* distribution and do
+nothing for returns. The innovation volatility was simply too high: realised annual changes
+in 10y Bund yields 1999–2025 have an sd of ~85bp including 2022 and ~70bp without it, and 30y
+yields move less.
+
+**Change.** `scenarios/engine.py::_default_sigma` vols: `long_rate` 0.0120 → **0.0070**,
+`real_rate` 0.0100 → **0.0065**, `credit_spread` 0.0060 → **0.0045**. Φ and the innovation
+correlation matrix untouched; Σ remains PSD and the augmented 9×9 is rebuilt from the same
+vector, so the equity-factor correlations are preserved. Resulting analytic annual-change sd
+of `long_rate` is 73bp; the 25y NS yield 69bp. Status: judgement (euro-area long-yield history
+is not in the repository), recorded in `INPUT_PROVENANCE.md` with a pending Bloomberg check.
+
+**Side effects, all in the right direction.** (i) LongGovt mean return falls from 6.8% to
+5.4% on a 4.5% yield — the earlier figure was a convexity windfall (½·D²·Δy²) from yields
+that were too volatile, so the LHP was being paid for a defect. (ii) V-M4's floor-binding
+share drops from 10.1% to 7.1%. (iii) IG_Credit lands marginally above its band at 7.7%;
+the remainder is the spread/jump block and the +0.30 rate–spread innovation correlation
+(spreads historically widen when rates *fall*), recorded as V-D7.
+
+**Guards added:** `test_var_long_rate_annual_change_volatility_is_in_band` (analytic, on Φ,Σ),
+`test_bond_sleeve_volatilities_are_in_plausible_band`,
+`test_bond_sleeve_single_year_returns_are_bounded`.
+
+**Effect on published numbers:** see `output/bond_volatility_summary.md`.
 
 **V-M4 — the `credit_spread` floor binds on 10.1% of steps.** The floor at 0.0 truncates
 the left tail, lifting the simulated mean 11bp above X̄ (0.0111 vs 0.0100) and pulling the
@@ -248,12 +272,17 @@ dispersion); and the participant config (contribution 20%, ambition 70%, floor �
 solidarity 5%, λ=5.0). GBP and New Zealand are never named in the document.
 
 **V-M7 — `repress()` produces ±50–63% single-year LHP returns at the window boundaries.**
-Pinning the state at year 25 drops `long_rate` from ~4.5% to 2.0% instantaneously: +63.4%
-on the D=20 sleeve at the open, −46.8% at the close. **However** — the baseline path shows
-the same extremes (max +61.7%, 18 of 65 years beyond ±25%), so this is a symptom of V-M3
-rather than an independent defect. The boundary treatment remains a design choice worth
-revisiting (a ramped transition would be more credible), but correcting V-M3 would largely
-resolve it.
+Pinning the state at year 25 drops `long_rate` from ~4.5% to 2.0% instantaneously. The
+original judgement was that this was a symptom of V-M3, because the baseline path showed
+the same extremes. **Re-measured after V-M3 (2026-08-22), that excuse is gone.** Baseline
+LHP single-year sd is now 11.2% with 4.6% of years beyond ±25%; the repression boundary
+produces a mean **+64.2%** (p5 +20%, p95 +118%) at the open and **−30.2%** at the close.
+The step itself is unchanged by the recalibration — `repress()` imposes a fixed −243bp
+average shock whatever Σ says — so it is now a genuine outlier rather than noise, and it
+is *in* the repression leg of every published participant number. A ramped transition
+(e.g. linear over 3 years into and out of the window) is now worth building; recommended,
+not implemented here, because it changes the repression definition (decision D-level) and
+the scenario's stated "12-year window" would need restating.
 
 ---
 
@@ -418,6 +447,14 @@ engine either to step or to refuse legibly.
 - **V-D6 — sub-annual `dt` is not supported.** Carry terms scale correctly but yield-change
   terms do not, so `dt=0.5` produces returns larger than `dt=1.0` in the O-U sleeves. Every
   published run uses `dt=1.0`. Recommend asserting `dt == 1.0` rather than fixing.
+
+- **V-D7 — fixed modified duration and D² convexity (added 2026-08-22).** The sleeves hold
+  D constant whatever the yield level. The largest baseline LongGovt year after V-M3 (+74%)
+  is a 260bp fall from an 8.6% starting yield; a real 25y bond yielding 8.6% has a modified
+  duration nearer 11 than 20, and D² is a zero-coupon convexity. Returns from high-yield
+  states are overstated roughly twofold. Affects tails only; a yield-dependent duration
+  (D = f(y, τ)) would be the fix. Also: the +0.30 rate–spread innovation correlation has the
+  wrong sign for flight-to-quality episodes and is why IG_Credit stays marginally above band.
 
 ---
 
