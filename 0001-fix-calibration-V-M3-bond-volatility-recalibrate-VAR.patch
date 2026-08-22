@@ -1,0 +1,1243 @@
+From ae69722207240c7f380920b85d4eb81def10a6b7 Mon Sep 17 00:00:00 2001
+From: "Claude (session 2026-08-22)" <noreply@anthropic.com>
+Date: Sat, 22 Aug 2026 03:51:40 +0000
+Subject: [PATCH] =?UTF-8?q?fix(calibration):=20V-M3=20bond=20volatility=20?=
+ =?UTF-8?q?=E2=80=94=20recalibrate=20VAR=20innovation=20vols?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+long_rate 120->70bp, real_rate 100->65bp, credit_spread 60->45bp. Phi and the
+innovation correlations untouched. Diagnosed, not assumed: the level term was
+106% of LongGovt variance and the annual-change sd of an AR(1) is ~1.05 sigma
+at phi=0.80, so persistence was never the lever.
+
+LongGovt 22.7% -> 14.3%, ILG 18.9% -> 13.3%, IG_Credit 9.8% -> 7.7%. Equity
+block unchanged. V-M4 floor binding 10.1% -> 7.1% as a by-product.
+
+Re-run attribution (5 seeds) and CGB dial (3 seeds) via the new
+tools/rerun_multiseed.py: re-anchor +101.6k / +82.5k (unchanged within noise
+vs the post-V-C3 article figures), bond-side +30.5k / +45.2k (unchanged), China
+cap now +4k in both worlds, pot levels down ~6% (convexity windfall removed).
+
+V-M7 re-measured: no longer a symptom of V-M3. The repress() boundary inflates
+repression-leg levels by ~8% (ramp sensitivity in the report). Recommended,
+not implemented. V-D7 added. Three tests added; 46/46.
+
+Also untracks simple_alm_changes.zip (was re-added in ee985aa).
+---
+ .gitignore                        |   1 +
+ docs/INPUT_PROVENANCE.md          |   6 +-
+ docs/TEST_COVERAGE.md             |  13 ++-
+ docs/VALIDATION_REPORT.md         |  85 ++++++++++-----
+ output/bond_volatility_summary.md | 173 ++++++++++++++++++++++++++++++
+ output/vm3_attribution.csv        |  42 ++++++++
+ output/vm3_cgb_dial.csv           |  32 ++++++
+ output/vm3_pot_distributions.csv  |  42 ++++++++
+ scenarios/engine.py               |  16 ++-
+ simple_alm_changes.zip            | Bin 24961 -> 0 bytes
+ tests/test_invariants.py          |  67 ++++++++++++
+ tools/rerun_multiseed.py          | 129 ++++++++++++++++++++++
+ 12 files changed, 573 insertions(+), 33 deletions(-)
+ create mode 100644 output/bond_volatility_summary.md
+ create mode 100644 output/vm3_attribution.csv
+ create mode 100644 output/vm3_cgb_dial.csv
+ create mode 100644 output/vm3_pot_distributions.csv
+ delete mode 100644 simple_alm_changes.zip
+ create mode 100644 tools/rerun_multiseed.py
+
+diff --git a/.gitignore b/.gitignore
+index dcf0f17..19cdfa1 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -24,3 +24,4 @@ output/cgb_dial_sweep_flat_lr.csv
+ venv/
+ .DS_Store
+ .pytest_cache/
++simple_alm_changes.zip
+diff --git a/docs/INPUT_PROVENANCE.md b/docs/INPUT_PROVENANCE.md
+index 3ea1f63..568cb5a 100644
+--- a/docs/INPUT_PROVENANCE.md
++++ b/docs/INPUT_PROVENANCE.md
+@@ -297,11 +297,11 @@ submission, it is this one.**
+ | Variable | Annualised σ | Status |
+ |---|---:|---|
+ | `short_rate` | 0.0080 | Judgement |
+-| `long_rate` | 0.0120 | Judgement |
+-| `real_rate` | 0.0100 | Judgement |
++| `long_rate` | 0.0070 | Judgement, anchored (V-M3, 2026-08-22): targets annual-change sd of long euro yields 60–90bp; 10y Bund 1999–2025 ≈ 85bp incl. 2022 / ≈ 70bp excl.; 30y lower. Level factor is the ∞-maturity limit. Was 0.0120. **Pending:** verify against GDBR10 / GDBR30 annual changes from Bloomberg |
++| `real_rate` | 0.0065 | Judgement, anchored (V-M3): long euro real yields (OATei/Bundei) show similar annual-change dispersion on a shorter record. Was 0.0100 |
+ | `inflation` | 0.0080 | Judgement |
+ | `growth` | 0.0250 | Judgement |
+-| `credit_spread` | 0.0060 | Judgement |
++| `credit_spread` | 0.0045 | Judgement, anchored (V-M3): euro IG OAS annual changes ≈ 50bp; 45bp innovation at φ = 0.65 reproduces this. Was 0.0060 |
+ | `curvature` | 0.0080 | Judgement |
+ | `global_growth` | 0.0200 | Judgement |
+ 
+diff --git a/docs/TEST_COVERAGE.md b/docs/TEST_COVERAGE.md
+index ee64820..6a408b4 100644
+--- a/docs/TEST_COVERAGE.md
++++ b/docs/TEST_COVERAGE.md
+@@ -1,6 +1,6 @@
+ # Test suite coverage
+ 
+-`tests/test_invariants.py` — **43 tests, all passing** at commit `0adf3bb`, 2026-08-22.
++`tests/test_invariants.py` — **46 tests, all passing** at the V-M3 commit, 2026-08-22 (43 at `0adf3bb`).
+ Run with `pytest tests/` or `python -m tests.test_invariants`.
+ 
+ This document exists to answer one question: **will the next change be caught by the suite,
+@@ -70,7 +70,10 @@ Categories used below:
+ | `test_macro_state_has_global_growth_and_roundtrips` | 8-wide state, `global_growth` at index `[7]`, array round-trip | Invariant |
+ | `test_var_simulated_moments_match_the_calibration` | Simulated means vs X̄ (±25bp) and simulated sd vs the analytic unconditional sd (±20%) | **Statistical** |
+ | `test_no_state_variable_explodes_or_degenerates_over_the_horizon` | Cross-sectional spread neither collapses nor blows up between year 20 and 65 | **Statistical** |
+-| `test_credit_spread_floor_does_not_bind_more_than_expected` | Pins the floor-binding share below 15% (currently 10.1%) | **Statistical** (V-M4) |
++| `test_credit_spread_floor_does_not_bind_more_than_expected` | Pins the floor-binding share below 15% (currently 7.1%) | **Statistical** (V-M4) |
++| `test_var_long_rate_annual_change_volatility_is_in_band` | Analytic annual-change sd of `long_rate` from (Φ, Σ) in 60–90bp | **Regression guard** (V-M3) |
++| `test_bond_sleeve_volatilities_are_in_plausible_band` | Simulated LongGovt / ILG / IG_Credit annual vol inside chosen bands | **Statistical** (V-M3) |
++| `test_bond_sleeve_single_year_returns_are_bounded` | No bond sleeve year outside (−55%, +110%); LongGovt years beyond ±25% under 13% | **Statistical** (V-M7) |
+ 
+ ### Asset sleeves — behavioural
+ 
+@@ -129,11 +132,11 @@ were added on 2026-08-22). **Seven of the twelve are guarded. Five are not.**
+ | V-C3 | Critical | `test_simulated_cross_country_equity_correlation_is_plausible`, `test_simulated_equity_total_volatility_matches_target`, `test_equity_market_factor_has_its_calibrated_moments` | ✅ **RESOLVED and guarded** (2026-08-22). Correlation floor asserted at 0.20 per pair and a [0.40, 0.65] band on the mean; volatility pinned externally |
+ | V-M1 | Major | `test_sleeve_rng_streams_are_distinct_across_scenarios` | ✅ Guarded |
+ | V-M2 | Major | — | ❌ **NOT GUARDED.** The construction-seed collisions (Europe = RealAssets = 44) are *masked* in the participant path because reseeding now overwrites them. Any caller that builds sleeves without `_run_batch` — including `main.py` — still gets colliding streams, and no test looks at construction seeds |
+-| V-M3 | Major | — | ❌ **NOT GUARDED, deliberately.** Bond volatility of 22.7% against a plausible 10–15% is a calibration judgement, not an invariant. A loose upper bound could be asserted; I chose not to, because picking the bound would be making the calibration decision the report explicitly leaves open |
+-| V-M4 | Major | `test_credit_spread_floor_does_not_bind_more_than_expected` | ✅ Guarded — pinned below 15%, currently 10.1% |
++| V-M3 | Major | `test_var_long_rate_annual_change_volatility_is_in_band`, `test_bond_sleeve_volatilities_are_in_plausible_band` | ✅ Guarded since the 2026-08-22 recalibration — analytic 60–90bp band on Φ,Σ and simulated sleeve bands LongGovt 10–17%, ILG 9–16%, IG_Credit 5–8.5% |
++| V-M4 | Major | `test_credit_spread_floor_does_not_bind_more_than_expected` | ✅ Guarded — pinned below 15%, currently 7.1% (10.1% before V-M3) |
+ | V-M5 | Major | *indirect only* | ⚠️ **Partially.** Understated seed dispersion was a consequence of V-C1, so fixing V-C1 fixes it. But nothing asserts that reported standard deviations are computed over genuinely independent draws — a future defect that re-froze any stochastic input would understate uncertainty again without failing any test |
+ | V-M6 | Major | — | ❌ **NOT GUARDED.** No test checks that a calibrated input appears in `INPUT_PROVENANCE.md`. This is mechanisable — a test could walk `COUNTRY_INPUTS`, `BOND_INPUTS` and `_DEFAULT_CURRENCIES` and assert each key is named in the doc — and it is the cheapest missing guard in this list |
+-| V-M7 | Major | — | ❌ **NOT GUARDED.** Nothing bounds single-year sleeve returns, so the ±50–63% swings at the `repress()` window boundaries would pass silently |
++| V-M7 | Major | `test_bond_sleeve_single_year_returns_are_bounded` | ⚠️ Partly — bounds single-year sleeve returns on *baseline* paths. The `repress()` boundary itself is not tested because it is a design choice still open; once a ramp is built, add a test on repressed paths |
+ | V-P1 | Major | `test_portfolio_gives_its_lhp_an_fx_model`, `test_subportfolio_without_fx_model_refuses_exposed_sleeves` | ✅ **RESOLVED and guarded** (2026-08-22). The second guard is general — it catches any FX-exposed sleeve in any sub-portfolio lacking a model |
+ | V-R1 | Major | `test_every_engine_in_the_codebase_can_take_a_step` | ✅ **RESOLVED and guarded** (2026-08-22). Verified to fail with the original raw `ValueError` when the guard is removed |
+ 
+diff --git a/docs/VALIDATION_REPORT.md b/docs/VALIDATION_REPORT.md
+index b434950..32c61af 100644
+--- a/docs/VALIDATION_REPORT.md
++++ b/docs/VALIDATION_REPORT.md
+@@ -29,11 +29,11 @@ silently.
+ | V-C3 | **Critical** | Cross-country equity correlation is +0.01; the mosaic's diversification benefit is an artefact | **RESOLVED 2026-08-22** | **Yes — corrected; see below** |
+ | V-M1 | Major | Sleeve RNG streams collided across scenarios (Taiwan ≡ RealAssets at lag 1) | **Yes** | Yes |
+ | V-M2 | Major | Construction seeds collide (Europe = RealAssets = 44; Japan = Commodities = 45) | Partly | No (masked by V-C1 fix) |
+-| V-M3 | Major | Bond return volatility ~1.5–2× plausible (LongGovt 22.7% vs 10–15%) | No — calibration | Yes, if corrected |
+-| V-M4 | Major | `credit_spread` floor binds on 10.1% of steps; simulated process ≠ calibrated process | No — flagged | Marginal |
++| V-M3 | Major | Bond return volatility ~1.5–2× plausible (LongGovt 22.7% vs 10–15%) | **RESOLVED 2026-08-22** — Σ recalibrated; LongGovt 14.3%, ILG 13.3%, IG_Credit 7.7% | **Yes — corrected; see below** |
++| V-M4 | Major | `credit_spread` floor binds on 10.1% of steps; simulated process ≠ calibrated process | Partly — 7.1% after V-M3 narrowed the spread innovation | Marginal |
+ | V-M5 | Major | Reported seed-to-seed standard deviations were themselves understated | **Yes** (via V-C1) | Yes — all stated uncertainties |
+ | V-M6 | Major | Provenance doc omits the VAR, the FX non-loading block, and the equity betas | No — documentation | No |
+-| V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — design | Yes, if corrected |
++| V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — **re-measured after V-M3: now material, not a symptom** (+64% / −30% mean vs 11% baseline sd) | Yes, if corrected |
+ | V-P1 | Major | `Portfolio` built its LHP with no FX model; LHP currency returns silently dropped to zero | **RESOLVED 2026-08-22** | No (no exhibit uses that path) |
+ | V-R1 | Major | `scenarios/regimes.py` carried 7-variable calibrations against the 8-variable state | **RESOLVED 2026-08-22** | No (unreferenced) |
+ | V-m1…m7 | Minor | Seven documentation / latent-risk defects | 3 fixed, 4 recorded | No |
+@@ -207,21 +207,45 @@ fix reseeds everything, but it remains live for any caller that builds sleeves w
+ `_run_batch` — including `main.py`. **Not fixed** (changing seed constants is a numbers
+ change with no upside once reseeding works); recorded so it is not rediscovered.
+ 
+-**V-M3 — bond volatility is 1.5–2× plausible.** Simulated annual return volatilities
+-against market reality:
+-
+-| Sleeve | simulated | plausible | max single-year |
+-|---|---:|---|---:|
+-| LongGovt (D=20) | **22.7%** | 10–15% | 127% |
+-| ILG (D=18) | **18.9%** | 10–14% | 91% |
+-| IG_Credit (D=7) | 9.8% | 5–7% | 44% |
+-| Equity Europe | 17.3% | 15–18% ✓ | 78% |
+-
+-Equity is well calibrated; the bond block is not. Root cause is the VAR's `long_rate`
+-innovation volatility (1.2%/yr, unconditional 2.24%) combined with 20-year duration. This
+-inflates LHP risk, widens the pot distribution, and inflates the absolute value of the
+-CGB volatility-reduction argument. **Not fixed** — recalibrating Σ is a design decision
+-affecting every number.
++**V-M3 — bond volatility is 1.5–2× plausible. RESOLVED 2026-08-22.** Simulated annual
++return volatilities against market reality, before and after:
++
++| Sleeve | before | after | plausible | max single-year before → after |
++|---|---:|---:|---|---:|
++| LongGovt (D=20) | 22.7% | **14.3%** | 10–15% | 127% → 89% |
++| ILG (D=18) | 18.9% | **13.3%** | 10–14% | 91% → 78% |
++| IG_Credit (D=7) | 9.8% | **7.7%** | 5–7% | 44% → 39% |
++| Equity Europe | 17.3% | 17.3% | 15–18% ✓ | unchanged |
++
++**Diagnosis, measured rather than assumed.** Variance decomposition of the LongGovt return
++on baseline paths: the level term (−D·Δ`long_rate`) accounted for 106% of variance, carry 3%,
++convexity 2%, slope/curvature −11% (the 25y Nelson-Siegel yield moves slightly less than the
++level factor). The duration mapping is therefore *not* the error. Nor is persistence: for an
++AR(1) the annual-change variance is 2σ²/(1+φ), so with φ = 0.80 the change sd (125bp) is
++almost the innovation sd (120bp) — lowering φ would narrow the *level* distribution and do
++nothing for returns. The innovation volatility was simply too high: realised annual changes
++in 10y Bund yields 1999–2025 have an sd of ~85bp including 2022 and ~70bp without it, and 30y
++yields move less.
++
++**Change.** `scenarios/engine.py::_default_sigma` vols: `long_rate` 0.0120 → **0.0070**,
++`real_rate` 0.0100 → **0.0065**, `credit_spread` 0.0060 → **0.0045**. Φ and the innovation
++correlation matrix untouched; Σ remains PSD and the augmented 9×9 is rebuilt from the same
++vector, so the equity-factor correlations are preserved. Resulting analytic annual-change sd
++of `long_rate` is 73bp; the 25y NS yield 69bp. Status: judgement (euro-area long-yield history
++is not in the repository), recorded in `INPUT_PROVENANCE.md` with a pending Bloomberg check.
++
++**Side effects, all in the right direction.** (i) LongGovt mean return falls from 6.8% to
++5.4% on a 4.5% yield — the earlier figure was a convexity windfall (½·D²·Δy²) from yields
++that were too volatile, so the LHP was being paid for a defect. (ii) V-M4's floor-binding
++share drops from 10.1% to 7.1%. (iii) IG_Credit lands marginally above its band at 7.7%;
++the remainder is the spread/jump block and the +0.30 rate–spread innovation correlation
++(spreads historically widen when rates *fall*), recorded as V-D7.
++
++**Guards added:** `test_var_long_rate_annual_change_volatility_is_in_band` (analytic, on Φ,Σ),
++`test_bond_sleeve_volatilities_are_in_plausible_band`,
++`test_bond_sleeve_single_year_returns_are_bounded`.
++
++**Effect on published numbers:** see `output/bond_volatility_summary.md`.
+ 
+ **V-M4 — the `credit_spread` floor binds on 10.1% of steps.** The floor at 0.0 truncates
+ the left tail, lifting the simulated mean 11bp above X̄ (0.0111 vs 0.0100) and pulling the
+@@ -247,12 +271,17 @@ dispersion); and the participant config (contribution 20%, ambition 70%, floor 
+ solidarity 5%, λ=5.0). GBP and New Zealand are never named in the document.
+ 
+ **V-M7 — `repress()` produces ±50–63% single-year LHP returns at the window boundaries.**
+-Pinning the state at year 25 drops `long_rate` from ~4.5% to 2.0% instantaneously: +63.4%
+-on the D=20 sleeve at the open, −46.8% at the close. **However** — the baseline path shows
+-the same extremes (max +61.7%, 18 of 65 years beyond ±25%), so this is a symptom of V-M3
+-rather than an independent defect. The boundary treatment remains a design choice worth
+-revisiting (a ramped transition would be more credible), but correcting V-M3 would largely
+-resolve it.
++Pinning the state at year 25 drops `long_rate` from ~4.5% to 2.0% instantaneously. The
++original judgement was that this was a symptom of V-M3, because the baseline path showed
++the same extremes. **Re-measured after V-M3 (2026-08-22), that excuse is gone.** Baseline
++LHP single-year sd is now 11.2% with 4.6% of years beyond ±25%; the repression boundary
++produces a mean **+64.2%** (p5 +20%, p95 +118%) at the open and **−30.2%** at the close.
++The step itself is unchanged by the recalibration — `repress()` imposes a fixed −243bp
++average shock whatever Σ says — so it is now a genuine outlier rather than noise, and it
++is *in* the repression leg of every published participant number. A ramped transition
++(e.g. linear over 3 years into and out of the window) is now worth building; recommended,
++not implemented here, because it changes the repression definition (decision D-level) and
++the scenario's stated "12-year window" would need restating.
+ 
+ ---
+ 
+@@ -340,6 +369,14 @@ engine either to step or to refuse legibly.
+   terms do not, so `dt=0.5` produces returns larger than `dt=1.0` in the O-U sleeves. Every
+   published run uses `dt=1.0`. Recommend asserting `dt == 1.0` rather than fixing.
+ 
++- **V-D7 — fixed modified duration and D² convexity (added 2026-08-22).** The sleeves hold
++  D constant whatever the yield level. The largest baseline LongGovt year after V-M3 (+74%)
++  is a 260bp fall from an 8.6% starting yield; a real 25y bond yielding 8.6% has a modified
++  duration nearer 11 than 20, and D² is a zero-coupon convexity. Returns from high-yield
++  states are overstated roughly twofold. Affects tails only; a yield-dependent duration
++  (D = f(y, τ)) would be the fix. Also: the +0.30 rate–spread innovation correlation has the
++  wrong sign for flight-to-quality episodes and is why IG_Credit stays marginally above band.
++
+ ---
+ 
+ ## Regenerated exhibits
+diff --git a/output/bond_volatility_summary.md b/output/bond_volatility_summary.md
+new file mode 100644
+index 0000000..8c4942c
+--- /dev/null
++++ b/output/bond_volatility_summary.md
+@@ -0,0 +1,173 @@
++# V-M3 — bond volatility recalibration: summary
++
++Branch `vm3-bond-volatility`, 2026-08-22. Diffs against `6f50ed4` (`main` before this work;
++`main` has since acquired two housekeeping commits touching only `simple_alm_changes.zip`).
++
++---
++
++## 1. Diagnosis — what actually dominated
++
++Variance decomposition of the LongGovt (D = 20, τ = 25) annual return on baseline paths,
++N = 2000 × 30 years after a 10-year burn-in, **before** any change:
++
++| term | sd | share of variance |
++|---|---:|---:|
++| carry (y·dt) | 2.0% | 3% |
++| level (−D·Δ`long_rate`) | 24.7% | **106%** |
++| slope + curvature (−D·(Δy₂₅ − Δ`long_rate`)) | 5.4% | −11% |
++| convexity (½·D²·Δy²) | 3.3% | 2% |
++| **total** | **22.6%** | 100% |
++
++The level shock is the whole story. The 25y Nelson-Siegel yield moved 108bp/yr; 20 × 1.08%
++≈ 22%. **The duration mapping is not the error** — the sanity check in the prompt holds.
++
++**Persistence is not the error either.** For an AR(1), var(Δx) = 2σ²/(1+φ). With φ = 0.80
++the annual-change sd of `long_rate` (125bp) is almost the innovation sd (120bp); the
++unconditional *level* sd is 224bp. Bond returns load on the change, not the level, so
++lowering φ would have narrowed the distribution of rate levels over 65 years while leaving
++V-M3 untouched. The report's attribution to the innovation volatility is confirmed, and the
++mean-reversion question it raised is answered: Φ stays.
++
++**Two consequences of over-volatile yields that were hiding in the outputs.** LongGovt's mean
++return was 6.8% on a 4.5% yield; the extra 2.3% was the convexity term ½·D²·E[Δy²] — the LHP
++was being paid for a defect. And the V-M4 floor on `credit_spread` bound on 10.1% of steps
++partly because the spread innovation was also too wide.
++
++## 2. What changed, to what, on what basis
++
++`scenarios/engine.py::_default_sigma`, three entries of the vol vector. Φ, the innovation
++correlation matrix, X̄, the floors and the equity-factor correlations are all untouched; the
++augmented 9×9 is rebuilt from the same vector so the equity-factor correlations survive.
++
++| innovation | before | after | basis |
++|---|---:|---:|---|
++| `long_rate` | 120bp | **70bp** | realised annual changes in 10y Bund yields 1999–2025: sd ≈ 85bp including 2022, ≈ 70bp without; 30y moves less; the level factor is the ∞-maturity limit. Implied annual-change sd 73bp; 25y NS yield 69bp — mid-band of the 60–90bp target |
++| `real_rate` | 100bp | **65bp** | long euro real yields (OATei / Bund-ei) show similar annual-change dispersion on a shorter record |
++| `credit_spread` | 60bp | **45bp** | euro IG OAS annual changes ≈ 50bp; 45bp at φ = 0.65 reproduces this |
++
++Alternatives run: (75/70/60) gave LongGovt 15.1%, IG_Credit 8.5%; (75/70/45) gave 15.1% and
++7.8%. The chosen (70/65/45) lands LongGovt at 14.3%, lower half of the 12–18% range the
++prompt asked for and inside the report's 10–15% band.
++
++**Status: judgement, anchored.** Euro long-yield history is not in the repository. Recorded
++in `docs/INPUT_PROVENANCE.md` with a pending check. **Bloomberg task, five minutes:** annual
++changes of `GDBR10 Index` and `GDBR30 Index`, 1999–2025, sd with and without 2022; and
++`GTDEMII10Y` or the OATei 2032 for the real leg. If the 30y figure is outside 60–80bp, revisit.
++
++## 3. Before / after, every sleeve
++
++| sleeve | before | after | band | max single year before → after |
++|---|---:|---:|---|---:|
++| LongGovt (D=20) | 22.7% | **14.3%** | 10–15% ✓ | 127% → 89% |
++| ILG (D=18) | 18.9% | **13.3%** | 10–14% ✓ | 91% → 78% |
++| IG_Credit (D=7) | 9.8% | **7.7%** | 5–7% — marginally above | 44% → 39% |
++| Equity Europe | 17.3% | 17.3% | 15–18% ✓ | unchanged |
++| LHP blend (50/40/10) | ~16% | **11.2%** | | 62% → 62% (see V-D7) |
++
++LongGovt mean return 6.8% → 5.4%. V-M4 floor binding 10.1% → 7.1%. Equity block verified
++unchanged (`test_simulated_equity_total_volatility_matches_target` passes with identical
++values; the factor correlations are rebuilt from the same vector).
++
++IG_Credit at 7.7% is the spread/jump block, not rates (7 × 0.69% ≈ 4.8% from rates). Its
++remaining excess is the +0.30 rate–spread innovation correlation, which has the wrong sign
++for flight-to-quality episodes. Not changed here — a correlation change is a different
++decision — recorded under V-D7.
++
++## 4. Re-run attribution and CGB dial
++
++`tools/rerun_multiseed.py` (new; the harness that produced the frozen validation CSVs was
++never committed). Same seeds and N as the validation record. Outputs
++`output/vm3_attribution.csv`, `output/vm3_cgb_dial.csv`, `output/vm3_pot_distributions.csv`.
++
++### Nested attribution, 5 seeds, N = 1000, EUR000 real at retirement
++
++| step | baseline level | baseline Δ | repression level | repression Δ |
++|---|---:|---:|---:|---:|
++| (i) Current | 1,332 → **1,252** | | 1,037 → **982** | |
++| (ii) +Re-anchor | | +115.7 ± 8.1 → **+101.6 ± 3.5** | | +88.0 ± 3.0 → **+82.5 ± 2.4** |
++| (iii) +China cap | | −2.9 ± 5.4 → **+4.0 ± 3.9** (t 2.3) | | −3.0 ± 2.4 → **+4.1 ± 1.5** (t 6.2) |
++| (iv) +Bond side | | +27.5 ± 3.5 → **+30.5 ± 2.7** | | +44.3 ± 2.7 → **+45.2 ± 4.5** |
++
++"Before" is the validated CSV at `0adf3bb` (21 Aug), which predates the V-C3 equity factor.
++Against the handover's post-V-C3 article figures (+105k / +84k) the re-anchor step is
++**unchanged within noise**. Three readings:
++
++- **Levels fall ~6%** (baseline) and ~5% (repression). This is the convexity windfall
++  leaving the LHP. Every pot *level* in the paper needs restating, including the
++  denominator of the "roughly eight per cent more pension" line.
++- **The re-anchor and bond-side deltas do not move.** The overlay's +30k / +45k was not a
++  product of an over-volatile LHP — worth a sentence in §13 or §17.8 as a robustness point.
++- **The China cap is now positive in both worlds**, +4k with t = 2.3 baseline and t = 6.2
++  under repression. §17.8 currently says it flipped sign under repression only; it should
++  now say the cap is weakly positive in both, and that the sign depends on realistic
++  cross-market correlation (it was negative under the zero-correlation defect).
++
++### CGB dial, 3 seeds, N = 1000
++
++| world | w | Δ median old → new | LHP vol old → new | p5 old → new |
++|---|---:|---:|---:|---:|
++| baseline | 5% | −5.8 → **−4.1k** | 13.5% → 9.2% | 1,032 → 952 |
++| repression | 5% | +1.3 → **+1.7k** | 14.8% → 11.9% | 842 → 772 |
++
++Volatility reduction from a 5% CGB line is 52bp baseline / 69bp repression (was 77 / 84), but
++**5.7% of LHP vol in both worlds before and after** — the proportional claim in §17.7 is
++untouched; the basis-point figures are not. Left-tail improvement (p5) at 5% weight: +3k
++baseline, +5k repression, as before. The conclusion — small median cost at baseline, small
++gain under repression, payoff in volatility and the left tail, roughly 3× more efficient
++under repression, defensible at 2–3% — survives. Quote the new figures.
++
++## 5. Exhibit 6 panel (b) — is the pot distribution publishable?
++
++**As far as V-M3 is concerned, yes.** Sleeve volatilities are in band and guarded, the
++equity block is unchanged, and the distribution now rests on realistic rate dynamics.
++
++**But V-M7 has changed status, and it sits in the repression leg of every published number.**
++Re-measured after V-M3: baseline LHP single-year sd is 11.2%; the `repress()` boundary
++produces a mean **+64%** LHP year at the window open (p5 +20%, p95 +118%) and **−30%** at the
++close. Before V-M3 this hid inside a noisy baseline; it no longer does. And it is not
++symmetric: 1.64 × 0.70 = 1.15, so the step is a net windfall to the LHP.
++
++Sensitivity, one seed, N = 300, 3-year linear ramp into and out of the window versus the
++current step:
++
++| | Current | Proposed / EUR LHP | + overlay | bond-side Δ | equity Δ |
++|---|---:|---:|---:|---:|---:|
++| step (current) | 955k | 1,044k | 1,094k | +49.6k | +89.2k |
++| 3-year ramp | **875k** | **958k** | **1,011k** | +53.2k | +83.2k |
++
++**Repression levels are inflated by ~8% by the boundary artefact. Deltas are within seed
++noise.** So: panel (a) is publishable; panel (b) in the baseline world is publishable; panel
++(b) in the repression world shows levels that depend on a boundary treatment that should be
++changed first. The decision is a scenario-definition one — "12 years pinned" becomes "12
++years pinned, 3-year transitions" — and belongs with D-level decisions, so it is recommended
++here and not implemented. Implementation is ~15 lines in `examples/run_attribution.py`
++(`repress(..., ramp=3)`) plus a test on repressed paths; then re-run the harness.
++
++## 6. Register and coverage
++
++`docs/VALIDATION_REPORT.md`: V-M3 marked resolved with the diagnosis above; V-M4 updated to
++7.1%; V-M7 re-measured and upgraded from symptom to open design item; V-D7 added (fixed
++modified duration and D² convexity overstate moves from high-yield states — the +74%
++baseline LongGovt year is a 260bp fall from 8.6%, where a real 25y bond has D ≈ 11; and the
++rate–spread correlation sign). `docs/TEST_COVERAGE.md`: 46 tests; V-M3 guarded by two tests;
++V-M7 partly guarded (baseline paths only, by design until the ramp decision).
++
++Tests added: `test_var_long_rate_annual_change_volatility_is_in_band` (analytic, on Φ,Σ —
++fails on Σ, not on Φ, by construction), `test_bond_sleeve_volatilities_are_in_plausible_band`
++(LongGovt 10–17%, ILG 9–16%, IG_Credit 5–8.5%), `test_bond_sleeve_single_year_returns_are_bounded`
++((−55%, +110%); LongGovt years beyond ±25% under 13%, currently 10.4%, was 28%). Φ stationarity
++and Σ PSD tests unchanged and passing. Suite 46/46.
++
++## 7. What remains open, and whether it affects a published number
++
++The handover's understanding was that after V-M3 nothing open affects a published number.
++**That is not quite right, and the correction matters:**
++
++- **V-M7 — yes, it does.** Repression-leg *levels* by ~8%; deltas no. Decision needed (ramp
++  length), then a ~15-line change and a re-run. Recommend 3 years.
++- **V-M4** — marginal, improved to 7.1%, hygiene.
++- **V-M2** — hygiene, unchanged.
++- **V-D7** (new) — tails only; affects p5/p95 of panel (b) slightly, not medians. Recommend
++  leaving for a later round and disclosing "fixed duration" in the model description.
++- **The calibration itself** — pending the five-minute Bloomberg check above. If the 30y
++  annual-change sd comes back inside 60–80bp, nothing changes.
+diff --git a/output/vm3_attribution.csv b/output/vm3_attribution.csv
+new file mode 100644
+index 0000000..21fd605
+--- /dev/null
++++ b/output/vm3_attribution.csv
+@@ -0,0 +1,42 @@
++# Nested attribution, per seed (EUR000 real pot at retirement) | commit ee985aa | N=1000 | seeds=[42, 137, 271, 314, 577] | post V-M3 bond-volatility recalibration
++step,world,seed,level,marginal_delta
++(i)   Current,baseline,42,1239.996,
++(ii)  +Re-anchor,baseline,42,1336.412,96.416
++(iii) +China cap,baseline,42,1344.562,8.15
++(iv)  +Bond side,baseline,42,1371.502,26.94
++(i)   Current,repression,42,975.287,
++(ii)  +Re-anchor,repression,42,1055.846,80.559
++(iii) +China cap,repression,42,1059.694,3.849
++(iv)  +Bond side,repression,42,1101.596,41.902
++(i)   Current,baseline,137,1238.525,
++(ii)  +Re-anchor,baseline,137,1338.32,99.796
++(iii) +China cap,baseline,137,1344.47,6.15
++(iv)  +Bond side,baseline,137,1377.626,33.156
++(i)   Current,repression,137,970.784,
++(ii)  +Re-anchor,repression,137,1050.346,79.562
++(iii) +China cap,repression,137,1055.784,5.438
++(iv)  +Bond side,repression,137,1105.776,49.993
++(i)   Current,baseline,271,1256.778,
++(ii)  +Re-anchor,baseline,271,1362.014,105.236
++(iii) +China cap,baseline,271,1364.006,1.993
++(iv)  +Bond side,baseline,271,1392.935,28.928
++(i)   Current,repression,271,986.027,
++(ii)  +Re-anchor,repression,271,1071.148,85.121
++(iii) +China cap,repression,271,1076.774,5.626
++(iv)  +Bond side,repression,271,1115.93,39.156
++(i)   Current,baseline,314,1253.791,
++(ii)  +Re-anchor,baseline,314,1356.374,102.583
++(iii) +China cap,baseline,314,1361.993,5.619
++(iv)  +Bond side,baseline,314,1395.258,33.265
++(i)   Current,repression,314,980.843,
++(ii)  +Re-anchor,repression,314,1063.643,82.799
++(iii) +China cap,repression,314,1065.59,1.948
++(iv)  +Bond side,repression,314,1113.703,48.112
++(i)   Current,baseline,577,1270.661,
++(ii)  +Re-anchor,baseline,577,1374.409,103.748
++(iii) +China cap,baseline,577,1372.72,-1.689
++(iv)  +Bond side,baseline,577,1402.9,30.18
++(i)   Current,repression,577,996.821,
++(ii)  +Re-anchor,repression,577,1081.378,84.557
++(iii) +China cap,repression,577,1085.208,3.831
++(iv)  +Bond side,repression,577,1131.806,46.598
+diff --git a/output/vm3_cgb_dial.csv b/output/vm3_cgb_dial.csv
+new file mode 100644
+index 0000000..66ca77d
+--- /dev/null
++++ b/output/vm3_cgb_dial.csv
+@@ -0,0 +1,32 @@
++# CGB dial sweep, per seed (EUR000 real pot at retirement) | commit ee985aa | N=1000 | seeds=[42, 137, 271] | post V-M3 bond-volatility recalibration
++calibration,world,seed,cgb_weight,median,delta_vs_zero,p5,p25,p75,p95,lhp_vol,lhp_real_return
++reverting_1.8_to_2.3,baseline,42,0.0,1371.502,0.0,966.279,1180.236,1620.014,2027.338,0.092811,0.024306
++reverting_1.8_to_2.3,baseline,42,0.01,1369.701,-1.801,968.537,1179.687,1618.841,2024.868,0.091781,0.024294
++reverting_1.8_to_2.3,baseline,42,0.02,1369.384,-2.117,968.532,1179.136,1617.779,2022.363,0.090711,0.024242
++reverting_1.8_to_2.3,baseline,42,0.03,1368.641,-2.861,967.993,1178.582,1616.959,2018.838,0.08966,0.024193
++reverting_1.8_to_2.3,baseline,42,0.05,1364.52,-6.982,967.973,1177.465,1615.652,2011.711,0.087588,0.024047
++reverting_1.8_to_2.3,repression,42,0.0,1101.596,0.0,772.685,947.858,1299.389,1632.409,0.11901,0.01762
++reverting_1.8_to_2.3,repression,42,0.01,1101.167,-0.429,773.542,948.219,1300.625,1632.219,0.117718,0.017685
++reverting_1.8_to_2.3,repression,42,0.02,1101.797,0.201,773.814,948.921,1300.553,1631.933,0.116424,0.017732
++reverting_1.8_to_2.3,repression,42,0.03,1102.236,0.64,774.859,949.416,1299.902,1630.734,0.114972,0.017774
++reverting_1.8_to_2.3,repression,42,0.05,1101.651,0.055,778.529,949.961,1302.366,1629.172,0.112081,0.017836
++reverting_1.8_to_2.3,baseline,137,0.0,1377.626,0.0,940.206,1179.483,1626.001,2009.882,0.092231,0.024296
++reverting_1.8_to_2.3,baseline,137,0.01,1377.394,-0.233,940.554,1178.524,1626.033,2007.278,0.091249,0.024241
++reverting_1.8_to_2.3,baseline,137,0.02,1376.828,-0.799,940.856,1178.285,1625.654,2005.253,0.090248,0.024201
++reverting_1.8_to_2.3,baseline,137,0.03,1375.087,-2.539,940.817,1178.189,1624.823,2003.103,0.089174,0.024173
++reverting_1.8_to_2.3,baseline,137,0.05,1374.701,-2.926,942.193,1177.614,1622.543,1997.308,0.087115,0.024067
++reverting_1.8_to_2.3,repression,137,0.0,1105.776,0.0,770.573,951.29,1299.988,1605.033,0.118781,0.017436
++reverting_1.8_to_2.3,repression,137,0.01,1106.182,0.406,771.541,952.506,1300.257,1604.026,0.117373,0.017465
++reverting_1.8_to_2.3,repression,137,0.02,1106.245,0.469,772.521,953.598,1300.369,1603.014,0.116035,0.017523
++reverting_1.8_to_2.3,repression,137,0.03,1106.897,1.121,773.502,954.09,1300.263,1601.998,0.114725,0.017607
++reverting_1.8_to_2.3,repression,137,0.05,1107.869,2.092,775.466,954.258,1301.133,1599.715,0.112028,0.017695
++reverting_1.8_to_2.3,baseline,271,0.0,1392.935,0.0,950.183,1190.575,1611.584,2030.852,0.091722,0.02403
++reverting_1.8_to_2.3,baseline,271,0.01,1392.87,-0.065,949.289,1190.035,1609.754,2030.137,0.090729,0.023956
++reverting_1.8_to_2.3,baseline,271,0.02,1393.052,0.118,950.382,1189.207,1607.212,2029.418,0.089731,0.023915
++reverting_1.8_to_2.3,baseline,271,0.03,1392.683,-0.252,951.835,1188.715,1605.62,2028.696,0.088687,0.023855
++reverting_1.8_to_2.3,baseline,271,0.05,1390.5,-2.435,954.924,1188.254,1601.478,2027.24,0.0866,0.02379
++reverting_1.8_to_2.3,repression,271,0.0,1115.93,0.0,771.414,966.214,1293.466,1618.357,0.117912,0.017315
++reverting_1.8_to_2.3,repression,271,0.01,1116.406,0.476,772.712,966.788,1293.605,1617.553,0.116533,0.017394
++reverting_1.8_to_2.3,repression,271,0.02,1116.937,1.006,774.011,967.246,1293.758,1616.918,0.11514,0.017455
++reverting_1.8_to_2.3,repression,271,0.03,1117.305,1.375,775.31,968.666,1293.996,1616.218,0.11381,0.017531
++reverting_1.8_to_2.3,repression,271,0.05,1118.751,2.821,777.693,969.4,1294.133,1615.65,0.110999,0.017661
+diff --git a/output/vm3_pot_distributions.csv b/output/vm3_pot_distributions.csv
+new file mode 100644
+index 0000000..e95f4ce
+--- /dev/null
++++ b/output/vm3_pot_distributions.csv
+@@ -0,0 +1,42 @@
++# Pot distribution percentiles per step/world/seed (EUR000) | commit ee985aa | N=1000
++step,world,seed,p5,p25,p50,p75,p95,sd
++(i)   Current,baseline,42,851.594,1051.448,1239.996,1464.634,1846.065,307.715
++(ii)  +Re-anchor,baseline,42,926.991,1143.962,1336.412,1582.736,1980.254,330.922
++(iii) +China cap,baseline,42,925.704,1146.113,1344.562,1583.312,1996.136,332.602
++(iv)  +Bond side,baseline,42,966.279,1180.236,1371.502,1620.014,2027.338,331.714
++(i)   Current,repression,42,672.343,832.97,975.287,1144.36,1447.538,235.403
++(ii)  +Re-anchor,repression,42,731.258,903.559,1055.846,1237.932,1575.854,253.799
++(iii) +China cap,repression,42,730.87,907.544,1059.694,1244.879,1579.072,254.941
++(iv)  +Bond side,repression,42,772.685,947.858,1101.596,1299.389,1632.409,260.238
++(i)   Current,baseline,137,843.612,1068.332,1238.525,1469.728,1822.431,319.383
++(ii)  +Re-anchor,baseline,137,907.564,1154.427,1338.32,1593.278,1981.745,343.084
++(iii) +China cap,baseline,137,909.322,1152.58,1344.47,1590.125,1984.844,343.847
++(iv)  +Bond side,baseline,137,940.206,1179.483,1377.626,1626.001,2009.882,341.157
++(i)   Current,repression,137,672.801,844.249,970.784,1151.677,1434.009,242.246
++(ii)  +Re-anchor,repression,137,731.505,904.952,1050.346,1244.333,1551.801,260.291
++(iii) +China cap,repression,137,730.875,906.149,1055.784,1244.166,1549.777,261.023
++(iv)  +Bond side,repression,137,770.573,951.29,1105.776,1299.988,1605.033,265.367
++(i)   Current,baseline,271,852.563,1063.784,1256.778,1460.683,1863.536,313.735
++(ii)  +Re-anchor,baseline,271,913.962,1148.901,1362.014,1580.508,2011.163,337.66
++(iii) +China cap,baseline,271,912.319,1155.938,1364.006,1583.561,1996.116,337.359
++(iv)  +Bond side,baseline,271,950.183,1190.575,1392.935,1611.584,2030.852,333.013
++(i)   Current,repression,271,676.327,844.846,986.027,1143.325,1441.246,236.06
++(ii)  +Re-anchor,repression,271,736.951,917.827,1071.148,1243.18,1567.064,254.552
++(iii) +China cap,repression,271,739.23,918.427,1076.774,1241.886,1576.671,254.191
++(iv)  +Bond side,repression,271,771.414,966.214,1115.93,1293.466,1618.357,257.338
++(i)   Current,baseline,314,851.853,1070.647,1253.791,1451.452,1822.299,307.813
++(ii)  +Re-anchor,baseline,314,931.437,1166.137,1356.374,1571.969,1981.282,333.028
++(iii) +China cap,baseline,314,934.147,1161.173,1361.993,1575.803,1967.884,332.281
++(iv)  +Bond side,baseline,314,964.65,1192.896,1395.258,1608.427,1991.212,331.164
++(i)   Current,repression,314,689.162,844.297,980.843,1140.83,1411.854,228.874
++(ii)  +Re-anchor,repression,314,750.296,915.954,1063.643,1238.578,1522.076,248.266
++(iii) +China cap,repression,314,751.199,917.441,1065.59,1237.907,1525.787,247.738
++(iv)  +Bond side,repression,314,786.525,960.716,1113.703,1292.05,1564.212,253.601
++(i)   Current,baseline,577,867.449,1082.414,1270.661,1473.383,1911.657,318.148
++(ii)  +Re-anchor,baseline,577,926.746,1164.967,1374.409,1590.695,2050.326,343.344
++(iii) +China cap,baseline,577,926.511,1165.303,1372.72,1601.338,2044.854,343.866
++(iv)  +Bond side,baseline,577,965.495,1198.008,1402.9,1634.783,2090.022,340.597
++(i)   Current,repression,577,689.832,853.858,996.821,1156.719,1473.481,241.693
++(ii)  +Re-anchor,repression,577,746.514,918.967,1081.378,1254.658,1598.613,261.047
++(iii) +China cap,repression,577,743.014,921.894,1085.208,1250.595,1613.237,261.35
++(iv)  +Bond side,repression,577,782.219,965.048,1131.806,1305.236,1654.203,265.567
+diff --git a/scenarios/engine.py b/scenarios/engine.py
+index f53a84e..3cf8be2 100644
+--- a/scenarios/engine.py
++++ b/scenarios/engine.py
+@@ -302,7 +302,21 @@ def _default_sigma() -> np.ndarray:
+     reason a euro one does. Its volatility (2.0%) sits below euro growth's
+     (2.5%): a diversified world aggregate is less volatile than any one region.
+     """
+-    vols = np.array([0.008, 0.012, 0.010, 0.008, 0.025, 0.006, 0.008, 0.020])
++    # V-M3 recalibration (2026-08-22). The previous vector had long_rate 1.2%,
++    # real_rate 1.0% and credit_spread 0.6%. With phi = 0.80 the annual CHANGE
++    # sd of an AR(1) is sigma*sqrt(2/(1+phi)) ~ 1.05*sigma, so a 120bp innovation
++    # put ~125bp/yr of yield change through a D=20 sleeve and produced 22.7%
++    # return volatility. Realised annual changes in 10y Bund yields 1999-2025
++    # have an sd of ~85bp including 2022 and ~70bp without it, and 30y yields
++    # move less; the level factor here is the infinite-maturity limit, so 70bp
++    # gives the 25y Nelson-Siegel yield an annual-change sd of ~69bp. Real
++    # yields (thinner record) are set at 65bp; euro IG OAS annual changes of
++    # ~50bp are reproduced by a 45bp innovation at phi = 0.65. Persistence was
++    # NOT changed: it governs the level distribution, not the change sd that
++    # bond returns load on (diagnosed, not assumed - see
++    # output/bond_volatility_summary.md). Status: judgement, pending a
++    # Bloomberg check of GDBR10/GDBR30 annual changes.
++    vols = np.array([0.008, 0.0070, 0.0065, 0.008, 0.025, 0.0045, 0.008, 0.020])
+     corr = np.array([
+         #  r_s    r_l    r_r    π      g      cs     C      G
+         [ 1.00,  0.70,  0.50,  0.20, -0.10,  0.20, -0.15, -0.08],  # short_rate
+diff --git a/simple_alm_changes.zip b/simple_alm_changes.zip
+deleted file mode 100644
+index 244c6f7d33bc64bde01f496b6eab64efaaa1726e..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 24961
+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
+
+diff --git a/tests/test_invariants.py b/tests/test_invariants.py
+index 687ab53..fc74087 100644
+--- a/tests/test_invariants.py
++++ b/tests/test_invariants.py
+@@ -927,3 +927,70 @@ if __name__ == "__main__":
+             print(f"FAIL  {fn.__name__}: {e}")
+     print(f"\n{len(fns)-failed}/{len(fns)} passed")
+     sys.exit(1 if failed else 0)
++
++
++# ---------------------------------------------------------------------------
++# V-M3 / V-M7 guards (added 2026-08-22 with the bond-volatility recalibration)
++# ---------------------------------------------------------------------------
++
++def _simulate_bond_sleeve_returns(n_scenarios=300, n_steps=40, burn=10, seed=11):
++    """Annual returns of the three bond sleeves as configured in main_participant,
++    on baseline paths, after a burn-in so the state is near its unconditional
++    distribution. Returns dict name -> 1-D array."""
++    from assets.bonds import NominalBondSleeve, CreditBondSleeve
++    from assets.linkers import LinkerSleeve
++    paths = mp.build_scenario_engine(mp.build_initial_state(), seed=seed).simulate(
++        n_steps=n_steps, n_scenarios=n_scenarios)
++    sleeves = {
++        "LongGovt":  NominalBondSleeve("LongGovt", duration=20.0, maturity=25.0),
++        "ILG":       LinkerSleeve("ILG", real_duration=18.0, maturity=22.0),
++        "IG_Credit": CreditBondSleeve("IG_Credit", duration=7.0, maturity=8.0, seed=seed + 4),
++    }
++    out = {k: [] for k in sleeves}
++    for p in paths:
++        for t in range(burn, n_steps):
++            for k, s in sleeves.items():
++                out[k].append(s.period_return(p[t], p[t + 1], 1.0))
++    return {k: np.asarray(v) for k, v in out.items()}
++
++
++def test_var_long_rate_annual_change_volatility_is_in_band():
++    """V-M3, the parameter itself. The annual-CHANGE sd of long_rate implied by
++    (Φ, Σ) — the quantity a duration sleeve actually loads on — must sit in the
++    60–90bp band set from realised Bund history. Analytic, so independent of any
++    simulation noise. Note persistence barely moves this (var Δx = 2σ²/(1+φ));
++    if this fails, look at Σ, not Φ."""
++    from scenarios.engine import VARParams, MacroState
++    p = VARParams()
++    V = p.sigma.copy()
++    for _ in range(500):
++        V = p.phi @ V @ p.phi.T + p.sigma
++    DV = 2 * V - p.phi @ V - V @ p.phi.T
++    i = MacroState._FIELDS.index("long_rate")
++    sd_change = float(np.sqrt(DV[i, i]))
++    assert 0.0060 <= sd_change <= 0.0090, (
++        f"long_rate annual-change sd {sd_change*1e4:.0f}bp outside 60–90bp band")
++
++
++def test_bond_sleeve_volatilities_are_in_plausible_band():
++    """V-M3 guard. Bands chosen with the 2026-08-22 recalibration (see
++    docs/VALIDATION_REPORT.md). Pre-fix values were 22.7% / 18.9% / 9.8%."""
++    R = _simulate_bond_sleeve_returns()
++    bands = {"LongGovt": (0.10, 0.17), "ILG": (0.09, 0.16), "IG_Credit": (0.05, 0.085)}
++    for k, (lo, hi) in bands.items():
++        v = float(R[k].std())
++        assert lo <= v <= hi, f"{k}: simulated annual vol {v:.1%} outside [{lo:.0%}, {hi:.0%}]"
++
++
++def test_bond_sleeve_single_year_returns_are_bounded():
++    """V-M7 gap. On baseline paths no bond sleeve should post a single-year
++    return beyond the bound, and years beyond ±25% must be rare. The bound is
++    loose because the fixed-duration/D²-convexity sleeve legitimately overstates
++    moves from high-yield starting points (recorded as a design item)."""
++    R = _simulate_bond_sleeve_returns()
++    for k, arr in R.items():
++        assert arr.min() > -0.55 and arr.max() < 1.10, (
++            f"{k}: single-year return range [{arr.min():+.0%}, {arr.max():+.0%}]")
++    share = float((np.abs(R["LongGovt"]) > 0.25).mean())
++    # 14% sd implies ~8% beyond ±1.75σ on Gaussian grounds; convexity skew adds ~2pp.
++    assert share < 0.13, f"LongGovt: {share:.1%} of years beyond ±25% (pre-fix: 28%)"
+diff --git a/tools/rerun_multiseed.py b/tools/rerun_multiseed.py
+new file mode 100644
+index 0000000..d2506e9
+--- /dev/null
++++ b/tools/rerun_multiseed.py
+@@ -0,0 +1,129 @@
++"""Multi-seed re-run of the nested attribution and the CGB dial.
++
++Reproduces the row format of output/validated_attribution.csv and
++output/validated_cgb_dial.csv so a post-recalibration run diffs directly
++against the frozen validation record. Added 2026-08-22 for V-M3; the harness
++that produced the original validated CSVs was not committed.
++
++Usage:  python tools/rerun_multiseed.py [N] [tag]
++Writes: output/<tag>_attribution.csv, output/<tag>_cgb_dial.csv,
++        output/<tag>_pot_distributions.csv
++"""
++from __future__ import annotations
++import csv, subprocess, sys
++from pathlib import Path
++
++import numpy as np
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "examples"))
++
++import main_participant as mp                                   # noqa: E402
++import run_attribution as ra                                    # noqa: E402
++import run_cgb_dial as rc                                       # noqa: E402
++from run_attribution import repress, cpi_at_retirement          # noqa: E402
++
++ATTR_SEEDS = [42, 137, 271, 314, 577]
++DIAL_SEEDS = [42, 137, 271]
++DIAL_WEIGHTS = rc.CGB_WEIGHTS
++
++
++def _commit() -> str:
++    try:
++        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
++                                       cwd=ROOT, text=True).strip()
++    except Exception:
++        return "unknown"
++
++
++def _worlds(seed: int, n: int, wy: int):
++    base = mp.build_scenario_engine(mp.build_initial_state(), seed=seed).simulate(
++        n_steps=mp.N_STEPS, n_scenarios=n)
++    rep = [repress(p) for p in base]
++    return {
++        "baseline":   (base, np.array([cpi_at_retirement(p, wy) for p in base])),
++        "repression": (rep,  np.array([cpi_at_retirement(p, wy) for p in rep])),
++    }
++
++
++def _pots(paths, cpi, equity, lhp, wy, seed):
++    res = mp._run_batch(paths, ra.cfg(equity, lhp), seed_base=seed)
++    return np.array([r.pot_path[wy] for r in res]) / cpi
++
++
++def main(n: int = 1000, tag: str = "vm3") -> None:
++    wy = mp.RETIREMENT_AGE - mp.ENTRY_AGE
++    out = ROOT / "output"; out.mkdir(exist_ok=True)
++    hdr_meta = f"commit {_commit()} | N={n}"
++
++    steps = [
++        ("(i)   Current",    ra.CURRENT_EQUITY,  mp.build_lhp_specs),
++        ("(ii)  +Re-anchor", ra.REANCHOR_EQUITY, mp.build_lhp_specs),
++        ("(iii) +China cap", ra.PROPOSED_EQUITY, mp.build_lhp_specs),
++        ("(iv)  +Bond side", ra.PROPOSED_EQUITY, ra.build_lhp_with_overlay),
++    ]
++
++    # ---- attribution --------------------------------------------------------
++    attr_rows, dist_rows = [], []
++    for seed in ATTR_SEEDS:
++        worlds = _worlds(seed, n, wy)
++        for world, (paths, cpi) in worlds.items():
++            prev = None
++            for tag_s, eq, lhp_fn in steps:
++                pots = _pots(paths, cpi, eq, lhp_fn(), wy, seed)
++                lvl = float(np.percentile(pots, 50)) / 1e3
++                attr_rows.append({"step": tag_s, "world": world, "seed": seed,
++                                  "level": round(lvl, 3),
++                                  "marginal_delta": "" if prev is None else round(lvl - prev, 3)})
++                dist_rows.append({"step": tag_s, "world": world, "seed": seed,
++                                  **{f"p{q}": round(float(np.percentile(pots, q)) / 1e3, 3)
++                                     for q in (5, 25, 50, 75, 95)},
++                                  "sd": round(float(pots.std()) / 1e3, 3)})
++                prev = lvl
++                print(f"[attr] seed {seed} {world:10s} {tag_s:<20s} {lvl:8.1f}k", flush=True)
++
++    with open(out / f"{tag}_attribution.csv", "w", newline="") as fh:
++        fh.write(f"# Nested attribution, per seed (EUR000 real pot at retirement) | {hdr_meta} "
++                 f"| seeds={ATTR_SEEDS} | post V-M3 bond-volatility recalibration\n")
++        w = csv.DictWriter(fh, fieldnames=["step", "world", "seed", "level", "marginal_delta"])
++        w.writeheader(); w.writerows(attr_rows)
++    with open(out / f"{tag}_pot_distributions.csv", "w", newline="") as fh:
++        fh.write(f"# Pot distribution percentiles per step/world/seed (EUR000) | {hdr_meta}\n")
++        w = csv.DictWriter(fh, fieldnames=list(dist_rows[0].keys()))
++        w.writeheader(); w.writerows(dist_rows)
++
++    # ---- CGB dial -----------------------------------------------------------
++    dial_rows = []
++    for seed in DIAL_SEEDS:
++        worlds = _worlds(seed, n, wy)
++        for world, (paths, cpi) in worlds.items():
++            zero = None
++            for cw in DIAL_WEIGHTS:
++                lhp = rc.lhp_specs_for(cw)
++                rec = rc._LHPRecorder(lhp)
++                with rec.capture():
++                    res = mp._run_batch(paths, ra.cfg(ra.PROPOSED_EQUITY, lhp), seed_base=seed)
++                pots = np.array([r.pot_path[wy] for r in res]) / cpi
++                vol, rr = rec.stats(cpi, wy)
++                med = float(np.percentile(pots, 50))
++                zero = med if zero is None else zero
++                dial_rows.append({"calibration": "reverting_1.8_to_2.3", "world": world, "seed": seed,
++                                  "cgb_weight": cw, "median": round(med / 1e3, 3),
++                                  "delta_vs_zero": round((med - zero) / 1e3, 3),
++                                  **{f"p{q}": round(float(np.percentile(pots, q)) / 1e3, 3)
++                                     for q in (5, 25, 75, 95)},
++                                  "lhp_vol": round(float(vol), 6), "lhp_real_return": round(float(rr), 6)})
++                print(f"[dial] seed {seed} {world:10s} w={cw:.0%} {med/1e3:8.1f}k "
++                      f"Δ={(med-zero)/1e3:+.1f}k vol={vol:.2%}", flush=True)
++
++    with open(out / f"{tag}_cgb_dial.csv", "w", newline="") as fh:
++        fh.write(f"# CGB dial sweep, per seed (EUR000 real pot at retirement) | {hdr_meta} "
++                 f"| seeds={DIAL_SEEDS} | post V-M3 bond-volatility recalibration\n")
++        w = csv.DictWriter(fh, fieldnames=list(dial_rows[0].keys()))
++        w.writeheader(); w.writerows(dial_rows)
++    print("done", flush=True)
++
++
++if __name__ == "__main__":
++    main(int(sys.argv[1]) if len(sys.argv) > 1 else 1000,
++         sys.argv[2] if len(sys.argv) > 2 else "vm3")
+-- 
+2.43.0
+
