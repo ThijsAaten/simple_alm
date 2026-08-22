@@ -133,7 +133,7 @@ Easy to conflate, and the distinction decides what a reader can check.
 | §3.1 Table 1a inputs: `drift`, CAPE now, CAPE anchor | **Market data** — not produced here | — |
 | Sovereign 10y yields in the bond overlay | **Market data** | — |
 | Equity `mbeta` / `idio` and the 15.5% factor volatility | **Market data → derived** | `python calibration/equity_factor_calibration.py` — reproducible |
-| FX loadings | **Market data → derived** | Joint regression; **source data now in repo, script is not** |
+| FX loadings | **Market data → derived** | `python calibration/fx_loading_calibration.py` — runs, but see V-F1 |
 | FX history for re-deriving the FX inputs | **Market data** | `data/fx_history_bloomberg.xlsx` — needs a Bloomberg terminal |
 
 **One derivation cannot be re-run from a clean clone.** The equity market factor now can:
@@ -142,10 +142,17 @@ Easy to conflate, and the distinction decides what a reader can check.
 python calibration/equity_factor_calibration.py    # reproduces the published betas
 ```
 
-The **FX loading regression still has no committed script**, though its source data is now
-present (`data/fx_bloomberg_legs.csv` + `data/fx_levels.csv` cover all twelve currencies).
-Recorded as such in `docs/INPUT_PROVENANCE.md`. Everything in the "Model output" rows above
-**is** fully reproducible from this repository.
+The FX loading regression is also runnable now:
+
+```bash
+python calibration/fx_loading_calibration.py   # prints derived loadings AND their disagreement
+```
+
+but it reproduces only one of its three columns. `global_growth_loading` matches exactly for
+all 12 currencies; `inflation_loading` and `growth_loading` do not, because both derive from a
+`b_usd` column that cannot be reproduced from this data. See **V-F1** in
+`docs/VALIDATION_REPORT.md`. Everything in the "Model output" rows above **is** fully
+reproducible from this repository.
 
 ## Regenerating Exhibit 6
 

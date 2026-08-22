@@ -450,12 +450,21 @@ The derivation is validated at one point: CNY's measured dollar correlation of 0
 reproduces the 0.92 the article publishes independently. That validates the *method*, not
 each of the 36 loadings.
 
-**Status of the FX loadings, updated 2026-08-22.** The source data is now complete: with
-`data/fx_bloomberg_legs.csv` added, every one of the twelve currencies the table covers is
-present in the repository — plus CHF, CAD, AUD and NZD, which are not in the table. **But no
-regression script has been committed**, so these 36 loadings remain Derived-but-not-
-re-runnable, and are the only such entries left. Committing that script would close the last
-reproducibility gap in this document.
+**Status of the FX loadings, updated 2026-08-22.** The source data is complete and the
+regression script is committed (`calibration/fx_loading_calibration.py`), so the derivation
+is now runnable. The result splits:
+
+| Column | Status |
+|---|---|
+| `global_growth_loading` (12) | **Derived, reproducible** — all 12 reproduce exactly |
+| `inflation_loading` (12) | **Derived, NOT reproducible** — see V-F1 |
+| `growth_loading` (12) | **Derived, NOT reproducible** — see V-F1 |
+
+The script reproduces the article's own CNY–USD correlation of 0.92 (measured 0.923), all 11
+round-3 correlations to 3dp, and the cited IDR/THB volatilities exactly — so the data and
+method are right. What it cannot reproduce is the `b_usd` column from which the inflation and
+growth loadings are computed. **24 of the 36 FX loadings therefore rest on a coefficient that
+cannot be traced to this data.** Full detail in `docs/VALIDATION_REPORT.md` under V-F1.
 
 ## 6. Participant configuration
 

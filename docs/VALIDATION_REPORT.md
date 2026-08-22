@@ -36,6 +36,7 @@ silently.
 | V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — design | Yes, if corrected |
 | V-P1 | Major | `Portfolio` built its LHP with no FX model; LHP currency returns silently dropped to zero | **RESOLVED 2026-08-22** | No (no exhibit uses that path) |
 | V-R1 | Major | `scenarios/regimes.py` carried 7-variable calibrations against the 8-variable state | **RESOLVED 2026-08-22** | No (unreferenced) |
+| **V-F1** | **Major** | The `b_usd` column behind 24 of the 36 FX loadings cannot be reproduced from the committed data | No — flagged, loadings unchanged | **No — measured, all changes within seed noise** |
 | V-m1…m7 | Minor | Seven documentation / latent-risk defects | 3 fixed, 4 recorded | No |
 | V-D1…D6 | Design | Six judgement calls, including all five known-open items | Recommendations only | — |
 
@@ -253,6 +254,84 @@ the same extremes (max +61.7%, 18 of 65 years beyond ±25%), so this is a sympto
 rather than an independent defect. The boundary treatment remains a design choice worth
 revisiting (a ramped transition would be more credible), but correcting V-M3 would largely
 resolve it.
+
+---
+
+## V-F1 — the FX `b_usd` column is not reproducible (found 2026-08-22)
+
+**Severity: Major.** The loadings may be right; they cannot be traced. Nothing is changed.
+
+**Context.** `data/fx_bloomberg_legs.csv` completed the FX source data, so the loading
+regression could finally be attempted. `calibration/fx_loading_calibration.py` now implements
+the method exactly as `assets/fx.py` documents it.
+
+**The pipeline is correct — verified four independent ways, all exact:**
+
+| Check | Published | Reproduced |
+|---|---|---|
+| All 11 currency correlations with the USD | round-3 table | exact to 3dp, all 11 |
+| CNY–USD correlation | **0.92 (the article's own figure)** | **0.923** |
+| IDR annualised volatility | 11.1% | 11.1% |
+| THB annualised volatility | 8.2% | 8.2% |
+| All 12 `global_growth_loading` values | `assets/fx.py` | **12/12 exact** |
+
+`global_growth_loading` comes from the residual growth beta of the *same* regression, and it
+reproduces perfectly. So the data, the conventions and the regression are right.
+
+**What does not reproduce.** The `b_usd` column, and therefore `inflation_loading`
+(= 0.50 × b_usd) and `growth_loading` (= −0.30 × b_usd):
+
+| ccy | b_usd derived | b_usd published | diff |
+|---|---:|---:|---:|
+| KRW | 0.240 | 0.760 | **−0.520** |
+| IDR | 0.565 | 0.997 | **−0.432** |
+| INR | 0.621 | 0.938 | −0.317 |
+| JPY | 0.686 | 0.447 | **+0.239** |
+| GBP | 0.355 | 0.596 | −0.241 |
+| TWD | 0.655 | 0.863 | −0.208 |
+| THB | 0.610 | 0.814 | −0.204 |
+| SGD | 0.547 | 0.720 | −0.173 |
+| CNY | 0.856 | 0.933 | −0.077 |
+| VND | 0.981 | 1.027 | −0.046 |
+| HKD | 0.985 | 0.988 | −0.003 |
+| USD | 1.000 | 1.000 | anchor |
+
+Searched and rejected: univariate vs joint; MSCI World in EUR, in USD, and ACWI in both;
+log vs simple returns; and 28 start/end window combinations. The best case anywhere in that
+space still misses KRW by 0.236 and JPY by 0.164 **in opposite directions**, so no single
+specification explains it.
+
+**A specific inconsistency.** The published `b_usd` is also inconsistent with the *round-3*
+univariate column on the same data and window — that column reproduces exactly here
+(KRW 0.300, IDR 0.615, CNY 0.865), while the round-4 `b_usd` claims 0.760, 0.997 and 0.933
+for the same three currencies. Both were described as a beta against the USD.
+
+**Consequence if re-derived:** 8 of 12 `inflation_loading` values and 9 of 12
+`growth_loading` values would change — KRW 0.40 → 0.10, IDR 0.50 → 0.30, JPY 0.20 → 0.35
+(the opposite direction). `global_growth_loading` would not change at all.
+
+**Measured impact: none beyond noise.** Re-deriving all 17 differing loadings and re-running
+both exhibits, 3 seeds at N=1000:
+
+| | Baseline committed → re-derived | Repression committed → re-derived |
+|---|---|---|
+| (ii) +Re-anchor | +103.6 ± 4.3 → +102.9 ± 4.7 | +79.6 ± 1.7 → +79.4 ± 2.9 |
+| (iii) +China cap | +2.4 ± 1.4 → +2.8 ± 0.6 | +2.9 ± 1.3 → +1.4 ± 3.0 |
+| (iv) +Bond side | +26.8 ± 2.4 → +26.0 ± 1.4 | +40.0 ± 1.7 → +41.0 ± 2.6 |
+| CGB Δ(5%) | −6.3 ± 3.4 → −4.8 ± 1.2 | +2.9 ± 2.5 → +1.7 ± 1.2 |
+
+**Every change is inside one seed standard deviation**, the largest being −1.5k on the
+China-cap step under repression. The loadings enter only through mean-zero deviation terms on
+a modest unhedged-FX share of the portfolio, and the individual currency changes partly
+offset. So this is a **provenance defect, not a numerical one**.
+
+**Not changed, but the recommendation is now to change it.** Because adopting the derived
+values costs nothing measurable, doing so would move 24 loadings from "cannot be traced" to
+"reproducible from committed data and a committed script", closing the last provenance gap in
+the model at no cost to any exhibit. That is a good trade — but it is still a decision about
+17 live parameters and belongs to the repository owner, not to a calibration run.
+`python calibration/fx_loading_calibration.py` prints the comparison and exits without
+touching `assets/fx.py`.
 
 ---
 

@@ -6,7 +6,7 @@ Scripts that produced calibrated inputs, kept so the derivations can be audited.
 |---|---|---|
 | `equity_factor_calibration.py` | `mbeta` and `idio_vol` per market, and the 15.5% equity factor volatility | **Yes**, since 2026-08-22 |
 | `convert_source_data.py` | Nothing — converts the source data to CSV | Yes (pickle step is a no-op once the CSVs exist) |
-| *(none)* | **FX macro loadings** — the joint regression behind `inflation_loading`, `growth_loading` and `global_growth_loading` | **No — no script exists** |
+| `fx_loading_calibration.py` | **FX macro loadings** — the joint regression behind `inflation_loading`, `growth_loading` and `global_growth_loading` | **Yes**, since 2026-08-22 — but see V-F1 |
 
 ## Equity market factor — reproducible
 
@@ -23,13 +23,23 @@ numpy 1.26.
 Until 2026-08-22 this script read two pickles from an absolute path outside the repository
 and could not be run at all. See `data/README.md` for why the source is now CSV.
 
-## FX loadings — data present, script absent
+## FX loadings — runnable, and it disagrees with what is committed
 
-`data/fx_bloomberg_legs.csv` (added 2026-08-22) supplies IDR, THB, SGD and VND, which
-`fx_levels.csv` lacked, plus CHF, CAD, AUD and NZD. **Every currency the FX loading table
-needs is now present in the repository.** What is missing is the regression script itself, so
-the 36 derived FX loadings still cannot be re-derived here and remain marked as such in
-`docs/INPUT_PROVENANCE.md`.
+```bash
+python calibration/fx_loading_calibration.py
+```
+
+The script implements the method exactly as `assets/fx.py` documents it, and validates its
+own pipeline against four independently published figures — all 11 currency correlations
+with the USD, the article's own CNY–USD 0.92 (measured 0.923), and the cited IDR (11.1%) and
+THB (8.2%) volatilities. All reproduce exactly.
+
+**`global_growth_loading` reproduces for all 12 currencies. `inflation_loading` and
+`growth_loading` do not**, because both are computed from a `b_usd` column that cannot be
+reproduced from this data under any specification or window tested. The script prints the
+discrepancy and **leaves `assets/fx.py` untouched** — rewriting 17 live loadings is a
+decision, not a side effect of running a calibration. Recorded as **V-F1** in
+`docs/VALIDATION_REPORT.md`.
 
 The same file would also support closing two open items — see `docs/VALIDATION_REPORT.md`:
 
