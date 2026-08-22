@@ -27,8 +27,14 @@ Yield dynamics (Ornstein-Uhlenbeck with global co-movement)
 -----------------------------------------------------------
 
     Δy = −κ × (y_t − ȳ) × dt
-       + β_global × Δy_EUR × dt          (pass-through from EUR/global rates)
+       + β_global × Δy_EUR                (pass-through from EUR/global rates)
        + σ × √dt × ε,   ε ~ N(0,1)
+
+    NOTE the pass-through term carries NO dt. Δy_EUR is already the EUR yield
+    change realised over the period, so scaling it by dt again would be
+    dimensionally wrong. This docstring previously wrote "× dt" here while the
+    code omitted it; the CODE was right. Identical at dt = 1.0, which is the only
+    step length any published run uses.
 
 where
     κ           = mean-reversion speed (yr⁻¹)
@@ -39,9 +45,32 @@ where
 PBOC management (ChinaGovernmentBondSleeve)
 -------------------------------------------
 The PBOC actively manages the yield curve, resulting in:
-  - Higher mean-reversion speed (κ ≈ 0.25) vs western bonds (κ ≈ 0.10–0.15)
+  - Mean-reversion at least as fast as western bonds (κ ≈ 0.10–0.15 for EUR)
   - Lower idiosyncratic vol (σ ≈ 50 bp/yr) vs western bonds (~100 bp/yr)
-  - Partial but imperfect co-movement with global rates (β ≈ 0.20–0.30)
+  - WEAK co-movement with global rates (β ≈ 0.10)
+
+CALIBRATION AUTHORITY. ``allocations/bond_inputs.py`` is the single source of
+truth for the numbers that drive published results; it passes every parameter
+explicitly, so the defaults below are illustrative only. They are kept equal to
+the bond_inputs China row so the two files cannot drift apart:
+
+    initial yield  1.8%   mid-2026 10y CGB (fell through 2% in late 2024 on
+                          deflation and property deleveraging)
+    long-run yield 2.3%   reversion target, deliberately above spot (worth ~50 bp
+                          of real return vs pinning it at the 1.8% cyclical low)
+    β_global       0.10   article §13 measures Fed-PBoC policy-cycle correlation
+                          at ~0.03; 0.10 is a conservative margin above that
+    σ_idio         50 bp  PBOC suppression of volatility
+
+An earlier version of this docstring quoted 2.3% initial / 2.5% long-run and
+β ≈ 0.20–0.30. Those were stale 2023-era figures and contradicted bond_inputs.py,
+which is what actually drives results. They are corrected above.
+
+KNOWN SIMPLIFICATION: ``build_overlay_specs`` applies κ = 0.20 uniformly to every
+overlay sovereign, CGB included. A PBOC-managed curve would arguably justify a
+faster κ (≈0.25) than an open developed curve, so the uniform κ understates how
+quickly CGB is pulled back to its long-run yield. Left as-is deliberately — it is
+conservative for the CGB case — but it is an assumption, not a measurement.
 
 Extension points
 ----------------
@@ -66,7 +95,8 @@ class ChinaGovernmentBondSleeve(AssetSleeve):
     China central government bond (CGB) in local currency (CNY).
 
     The CGB yield follows an O-U process with PBOC-managed parameters:
-    fast mean-reversion to a structurally low long-run yield and low
+    mean-reversion toward a structurally low long-run yield (2.3%, modestly
+    above the 1.8% starting level rather than equal to it) and low
     idiosyncratic volatility relative to western government bonds.
 
     Local-currency return only.  Apply FXModel CNY/EUR overlay separately.
@@ -83,18 +113,22 @@ class ChinaGovernmentBondSleeve(AssetSleeve):
     convexity : float or None
         Convexity (yr²).  If None, uses the par-bond approximation D².
     initial_yield : float
-        Starting CGB yield (annualised).  ~2.3 % for 10Y CGB in 2024–25.
+        Starting CGB yield (annualised).  1.8 % — the mid-2026 10Y CGB level.
     long_run_yield : float
-        Equilibrium CGB yield the O-U process reverts to.
-        ~2.5 % consistent with PBOC inflation target of 2–3 % and low
-        neutral real rates in a high-savings economy.
+        Equilibrium CGB yield the O-U process reverts to.  2.3 %, deliberately
+        ABOVE spot: setting it equal to initial_yield would assume today's
+        cyclical low is permanent.  It is worth ~50 bp of annualised real return
+        on the sleeve, which is what moves the store-of-value claim from
+        marginal to modestly supported (see allocations/bond_inputs.py).
     yield_reversion : float
-        O-U mean-reversion speed κ (yr⁻¹).  0.25 ≈ 4-year half-life,
-        reflecting active PBOC yield-curve management (vs ~0.10 for EUR).
+        O-U mean-reversion speed κ (yr⁻¹).  0.20 ≈ 3.5-year half-life, matching
+        the uniform κ that ``build_overlay_specs`` applies across the overlay.
     global_rate_beta : float
         Sensitivity to changes in the EUR long rate (Δlong_rate_EUR).
-        0.25 reflects partial but imperfect integration with global bond
-        markets due to capital controls and PBOC intervention.
+        0.10 — capital controls and PBOC intervention leave the CGB curve only
+        weakly coupled to EUR/global rates.  Article §13 puts the Fed-PBoC
+        policy-cycle correlation at ~0.03; 0.10 is a conservative margin above
+        that measurement, conceding more pass-through than the data implies.
     idio_yield_vol : float
         Annualised idiosyncratic yield volatility (σ).  ~50 bp for CGBs
         (vs ~100 bp for EUR govts) due to PBOC suppression of volatility.
@@ -111,10 +145,10 @@ class ChinaGovernmentBondSleeve(AssetSleeve):
         duration:         float      = 7.0,
         maturity:         float | None = None,
         convexity:        float | None = None,
-        initial_yield:    float      = 0.023,
-        long_run_yield:   float      = 0.025,
-        yield_reversion:  float      = 0.25,
-        global_rate_beta: float      = 0.25,
+        initial_yield:    float      = 0.018,
+        long_run_yield:   float      = 0.023,
+        yield_reversion:  float      = 0.20,
+        global_rate_beta: float      = 0.10,
         idio_yield_vol:   float      = 0.005,
         lambda_:          float      = 5.0,
         seed:             int | None = None,
@@ -175,7 +209,8 @@ class GovernmentBondSleeve(ChinaGovernmentBondSleeve):
 
     ``fx_key`` sets the (typically unhedged) currency exposure for a EUR-base
     investor; leave None for a EUR-denominated sleeve. Where the FX model lacks
-    a currency (e.g. IDR, NZD), pass the documented proxy key (THB, AUD).
+    a currency (NZD is still missing), pass the documented proxy key (AUD). IDR is
+    no longer proxied - it is a first-class FXModel currency as of 2026-08.
     """
 
     def __init__(

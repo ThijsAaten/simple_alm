@@ -306,17 +306,46 @@ def _stable_offset(name: str, modulo: int = 100_000) -> int:
     return int.from_bytes(digest[:8], "big") % modulo
 
 
-def _reseed_specs(specs: list[SleeveSpec], base_seed: int) -> None:
+# Domain tags keeping the RSP, the LHP and the FX model in disjoint seed spaces.
+_DOMAIN_RSP, _DOMAIN_LHP, _DOMAIN_FX = 0, 1, 2
+
+
+def _reseed_specs(specs: list[SleeveSpec], base_seed: int, domain: int = _DOMAIN_RSP) -> None:
     """Re-seed each sleeve's internal RNG using a name-derived offset.
 
     Called after deepcopy so that repeated runs on the same macro path
     (e.g. stress scenario replications) produce distinct idiosyncratic draws
     while remaining deterministic given the same base_seed.
+
+    SEEDS ARE COMPOSED AS A SEQUENCE, NOT ADDED. The previous implementation used
+    ``default_rng(base_seed + sleeve_offset)``. Because ``base_seed`` increments
+    by one per scenario, any two sleeves whose name-derived offsets differed by
+    less than N shared a random stream across scenarios: Taiwan's offset (82420)
+    and RealAssets' (82419) differ by ONE, so scenario i's Taiwan equity drew the
+    identical idiosyncratic sequence to scenario i+1's RealAssets — and both sit
+    in the RSP at once. At N=1000 that affected 12.2% of sleeve-runs, and it grew
+    with N (20.6% at N=5000), so adding paths made it worse rather than better.
+
+    ``default_rng([...])`` routes the values through SeedSequence, which hashes
+    the whole tuple, so neighbouring base seeds no longer produce neighbouring
+    streams. ``domain`` keeps the RSP and LHP in disjoint spaces even for the
+    three sleeve names (Indonesia, India, Korea) that appear in both.
     """
+    # BOTH attribute spellings must be covered. AssetSleeve subclasses are not
+    # consistent: the bond sleeves store their generator as ``_rng`` while
+    # _FactorAssetSleeve (Equity, RealAssets, Commodities) stores it as ``rng``.
+    # Guarding only on ``_rng`` — as this function did until 2026-08 — silently
+    # skipped every equity sleeve, RealAssets and Commodities, so those sleeves
+    # kept whatever generator state the deepcopied template carried and drew the
+    # IDENTICAL idiosyncratic sequence in every scenario. Equity idio_vol (0.16
+    # to 0.28) therefore contributed no cross-scenario dispersion at all, and one
+    # arbitrary draw path was baked into every path as if it were certain.
     for spec in specs:
-        if hasattr(spec.sleeve, "_rng"):
-            sleeve_offset = _stable_offset(spec.sleeve.name)
-            spec.sleeve._rng = np.random.default_rng(base_seed + sleeve_offset)
+        sleeve_offset = _stable_offset(spec.sleeve.name)
+        rng = np.random.default_rng([base_seed, domain, sleeve_offset])
+        for attr in ("_rng", "rng"):
+            if hasattr(spec.sleeve, attr):
+                setattr(spec.sleeve, attr, rng)
 
 
 # ---------------------------------------------------------------------------
@@ -379,12 +408,22 @@ class LifecycleSimulator:
         lhp_specs = copy.deepcopy(cfg.lhp_specs)
 
         if run_seed is not None:
-            _reseed_specs(rsp_specs, base_seed=run_seed)
-            _reseed_specs(lhp_specs, base_seed=run_seed + 10_000)
+            _reseed_specs(rsp_specs, base_seed=run_seed, domain=_DOMAIN_RSP)
+            _reseed_specs(lhp_specs, base_seed=run_seed, domain=_DOMAIN_LHP)
 
-        # One FXModel per run: single RNG draw per currency per period ensures
-        # all sleeves see the same exchange-rate move in each period.
-        fx_seed = (run_seed + 20_000) if run_seed is not None else None
+        # One FXModel per run, advanced ONCE per simulated year by this loop (see
+        # _fx_step below) and read by both sub-portfolios, so every sleeve on both
+        # sides of the fund sees the same exchange-rate move in a given year.
+        #
+        # This must not be delegated to SubPortfolio.step: that call both draws
+        # the period's shock and rolls the PPP gaps forward, so letting each
+        # sub-portfolio advance the shared model made the RSP and the LHP draw
+        # INDEPENDENT currency shocks for the same year and decayed the PPP gaps
+        # at twice the calibrated rate. The unhedged-overlay thesis depends on a
+        # common currency shock hitting both sides together, so the sub-portfolios
+        # are handed the same per-year dict instead.
+        # Sequence-composed for the same reason as the sleeve seeds above.
+        fx_seed = [run_seed, _DOMAIN_FX] if run_seed is not None else None
         fx_model = FXModel.default(seed=fx_seed)
 
         rsp_sub = SubPortfolio(rsp_specs, initial_value=1.0, fx_model=fx_model)
@@ -435,9 +474,11 @@ class LifecycleSimulator:
             lhp_w    = cohort.lhp_fraction
             leverage = cohort.leverage_fraction
 
-            # RSP and LHP returns from actual asset sleeve models
-            rsp_return = rsp_sub.step(state_t, state_t1, dt=1.0)
-            lhp_return = lhp_sub.step(state_t, state_t1, dt=1.0)
+            # RSP and LHP returns from actual asset sleeve models. One FX draw
+            # for the year, shared by both sub-portfolios.
+            fx_returns = fx_model.step(state_t, state_t1, dt=1.0)
+            rsp_return = rsp_sub.step(state_t, state_t1, dt=1.0, fx_returns=fx_returns)
+            lhp_return = lhp_sub.step(state_t, state_t1, dt=1.0, fx_returns=fx_returns)
 
             leverage_cost = leverage * state_t.short_rate
             period_return = rsp_w * rsp_return + lhp_w * lhp_return - leverage_cost
@@ -510,9 +551,11 @@ class LifecycleSimulator:
             lhp_w    = cohort.lhp_fraction
             leverage = cohort.leverage_fraction   # 0.0 post-retirement
 
-            # RSP and LHP returns from actual asset sleeve models
-            rsp_return = rsp_sub.step(state_t, state_t1, dt=1.0)
-            lhp_return = lhp_sub.step(state_t, state_t1, dt=1.0)
+            # RSP and LHP returns from actual asset sleeve models. One FX draw
+            # for the year, shared by both sub-portfolios.
+            fx_returns = fx_model.step(state_t, state_t1, dt=1.0)
+            rsp_return = rsp_sub.step(state_t, state_t1, dt=1.0, fx_returns=fx_returns)
+            lhp_return = lhp_sub.step(state_t, state_t1, dt=1.0, fx_returns=fx_returns)
 
             leverage_cost = leverage * state_t.short_rate
             period_return = rsp_w * rsp_return + lhp_w * lhp_return - leverage_cost

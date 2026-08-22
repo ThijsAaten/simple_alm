@@ -91,22 +91,67 @@ class _FactorAssetSleeve(AssetSleeve):
         idio_vol: float,
         long_run_growth: float,
         seed: Optional[int],
+        global_growth_beta: float = 0.0,
+        long_run_global_growth: float = 0.030,
+        long_run_inflation: float = 0.025,
+        market_beta: float = 0.0,
     ) -> None:
         super().__init__(name)
         self.drift           = drift
-        self.growth_beta     = growth_beta
+        self.growth_beta     = growth_beta     # vs EURO-AREA growth (state.growth)
         self.inflation_beta  = inflation_beta
         self.idio_vol        = idio_vol
         self.long_run_growth = long_run_growth
+        self.long_run_inflation = long_run_inflation
         self.rng             = np.random.default_rng(seed)
+        # Global-cycle exposure. Defaults to 0.0 so every existing sleeve behaves
+        # exactly as before; see allocations/mosaic.py build_equity_specs(growth_mode=)
+        # for how the country mosaic can split its beta across the two cycles.
+        self.global_growth_beta     = global_growth_beta
+        self.long_run_global_growth = long_run_global_growth
+        # Loading on the global equity market factor. Zero for non-equity sleeves,
+        # so their behaviour is unchanged.
+        self.market_beta            = market_beta
 
-    def _factor_return(self, state_t: MacroState, dt: float) -> float:
-        """Systematic factor return + one idiosyncratic draw."""
+    def _factor_return(self, state_t: MacroState, dt: float,
+                       equity_factor: float = 0.0) -> float:
+        """Systematic factor return + one idiosyncratic draw.
+
+        ``state_t.growth`` is EURO-AREA growth; ``state_t.global_growth`` is the
+        world aggregate. A sleeve may load on either or both.
+
+        ``equity_factor`` is the global equity market factor return realised over
+        THIS period — i.e. ``state_t1.equity_factor``, not ``state_t``'s. It is
+        passed in rather than read off ``state_t`` because it describes the
+        period, not its starting point.
+        """
         growth_dev  = state_t.growth - self.long_run_growth
+        global_dev  = state_t.global_growth - self.long_run_global_growth
+        # INFLATION ENTERS AS A DEVIATION, like growth. Until 2026-08 this line
+        # read `self.inflation_beta * state_t.inflation`, i.e. the raw LEVEL,
+        # while growth in the very same expression used a deviation. The effect
+        # was a permanent return offset of inflation_beta x pi-bar: every equity
+        # market returned 50-75bp BELOW the §3.1 `drift` that
+        # allocations/country_inputs.py documents as "the EquitySleeve's long-run
+        # nominal total return". Worse, the offset scaled with each market's own
+        # inflation_beta, so it silently handed China and Indonesia (beta -0.20,
+        # drag -0.50%) a 25bp permanent advantage over Europe and the USA
+        # (beta -0.30, drag -0.75%) — a tilt to the article's central Asia-vs-West
+        # comparison that nobody chose.
+        #
+        # NOTE the convention is NOT uniform across sleeves, deliberately:
+        # RealAssetSleeve documents and keeps the LEVEL form (real assets have a
+        # genuine inflation pass-through), CommoditySleeve uses deviations and
+        # says why. Only EquitySleeve reaches this method.
+        infl_dev    = state_t.inflation - self.long_run_inflation
         systematic  = (
             self.drift            * dt
             + self.growth_beta    * growth_dev        * dt
-            + self.inflation_beta * state_t.inflation * dt
+            + self.global_growth_beta * global_dev    * dt
+            + self.inflation_beta * infl_dev          * dt
+            # The market factor is already a RETURN over the period, so it takes
+            # no dt — unlike every deviation term above, which is a rate.
+            + self.market_beta    * equity_factor
         )
         return systematic + self.idio_vol * np.sqrt(dt) * self.rng.standard_normal()
 
@@ -140,8 +185,16 @@ class EquitySleeve(_FactorAssetSleeve):
     Parameters
     ----------
     drift            : long-run nominal total return p.a.          (default 7 %)
-    growth_beta      : sensitivity to growth deviation             (default 0.6)
-    inflation_beta   : inflation sensitivity (negative for equities)(default −0.3)
+    growth_beta      : sensitivity to EURO-AREA growth deviation   (default 0.6)
+    global_growth_beta : sensitivity to WORLD growth deviation     (default 0.0)
+    market_beta      : loading on the global equity market factor  (default 0.0)
+                       Added 2026-08-22 to close validation finding V-C3: without
+                       it, cross-country equity correlation was +0.01 against an
+                       observed 0.5-0.9, and the country mosaic appeared to
+                       diversify in a way real markets do not.
+    inflation_beta   : sensitivity to the inflation DEVIATION from trend,
+                       negative for equities                       (default −0.3)
+    long_run_inflation : trend inflation for the deviation         (default 2.5 %)
     idio_vol         : annualised idiosyncratic volatility         (default 15 %)
     long_run_growth  : trend growth for deviation calculation      (default 2.5 %)
     cape             : starting CAPE ratio                         (default 25)
@@ -166,9 +219,15 @@ class EquitySleeve(_FactorAssetSleeve):
         valuation_beta: float            = 0.05,
         payout_ratio: float              = 0.50,
         long_run_earnings_growth: float  = 0.04,
+        global_growth_beta: float        = 0.0,
+        long_run_global_growth: float    = 0.030,
+        long_run_inflation: float        = 0.025,
+        market_beta: float               = 0.0,
     ) -> None:
         super().__init__(name, drift, growth_beta, inflation_beta, idio_vol,
-                         long_run_growth, seed)
+                         long_run_growth, seed,
+                         global_growth_beta, long_run_global_growth,
+                         long_run_inflation, market_beta)
         self._cape                       = float(cape)
         self._cape_fair                  = float(cape_fair)
         self._valuation_beta             = float(valuation_beta)
@@ -190,7 +249,8 @@ class EquitySleeve(_FactorAssetSleeve):
         log_gap  = np.log(self._cape / self._cape_fair)
         val_drag = -self._valuation_beta * log_gap * dt
 
-        r = self._factor_return(state_t, dt) + val_drag
+        # state_t1 carries the factor return realised over [t, t+1].
+        r = self._factor_return(state_t, dt, state_t1.equity_factor) + val_drag
 
         # Update CAPE: price grows at (r − dividend yield); earnings at LR rate
         div_yield  = self._payout_ratio / self._cape

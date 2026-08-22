@@ -99,17 +99,44 @@ class SubPortfolio:
         state_t:  MacroState,
         state_t1: MacroState,
         dt: float = 1.0,
+        fx_returns: dict[str, float] | None = None,
     ) -> float:
         """
         Advance all sleeves by one period.
+
+        Parameters
+        ----------
+        fx_returns : dict[str, float] or None
+            Currency returns for THIS period, already drawn by the caller.  Pass
+            this when several sub-portfolios must share one currency path: the
+            caller advances the FXModel once per period and hands the same dict
+            to each sub-portfolio, so every sleeve on both sides of the fund sees
+            the same exchange-rate move.  When None (the default), this
+            sub-portfolio advances its own attached FXModel — correct only when
+            it is the sole holder of that model, since ``FXModel.step`` both
+            draws the period's shock AND rolls the PPP gaps forward.
 
         Returns
         -------
         weighted_return : float
             The value-weighted return of the sub-portfolio.
         """
-        # Compute all FX returns once so every sleeve sees the same draw.
-        fx_returns = self._fx_model.step(state_t, state_t1, dt) if self._fx_model else {}
+        if fx_returns is None:
+            if self._fx_model is None:
+                # GENERAL GUARD. Silently returning zero FX for a sleeve that
+                # declares currency exposure is the failure mode that hid the
+                # Portfolio-LHP defect: no error, no warning, materially different
+                # numbers. Fail loudly instead.
+                exposed = [s.sleeve.name for s in self.specs if s.sleeve.fx_exposures]
+                if exposed:
+                    raise ValueError(
+                        f"sub-portfolio has no FXModel but these sleeves declare "
+                        f"fx_exposures: {exposed}. Their currency return would be "
+                        f"silently dropped to zero. Pass fx_model= when constructing "
+                        f"the SubPortfolio, or fx_returns= to step()."
+                    )
+            # Sole-holder path: draw (and advance) this sub-portfolio's own model.
+            fx_returns = self._fx_model.step(state_t, state_t1, dt) if self._fx_model else {}
 
         weighted_return = 0.0
         for spec in self.specs:
@@ -190,7 +217,11 @@ class Portfolio:
         lhp_value = initial_value * hedge_ratio
         rsp_value = initial_value * (1.0 - hedge_ratio)
 
-        self.lhp = SubPortfolio(lhp_specs, lhp_value)
+        # The LHP receives the SAME FX model as the RSP. It previously received
+        # none, so any unhedged foreign-currency sleeve placed in the LHP through
+        # this path — which is exactly what the sovereign bond overlay is — had
+        # its FX return silently dropped to zero. Validation finding V-M-Portfolio.
+        self.lhp = SubPortfolio(lhp_specs, lhp_value, fx_model=fx_model)
         self.rsp = SubPortfolio(rsp_specs,  rsp_value, fx_model=fx_model)
 
     # ------------------------------------------------------------------

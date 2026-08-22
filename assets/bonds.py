@@ -54,8 +54,10 @@ Extension points
 ----------------
 - Replace the single-maturity proxy with a full key-rate duration vector so
   that each cash flow is discounted separately.
-- Model the credit spread as an additional VAR state variable (requires 8D VAR)
-  for richer co-movement with macro factors.
+- (DONE) The credit spread is already VAR state variable [5]; this sleeve reads
+  state.credit_spread directly. Note that ``_jump_intensity`` keys off
+  ``state.growth``, which is EURO-AREA growth — correct for a EUR credit sleeve,
+  but no longer the only growth variable available (see state [7]).
 - Use exponential jump sizes (always positive) for a more conservative model.
 """
 

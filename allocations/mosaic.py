@@ -26,9 +26,45 @@ from portfolio.portfolio import SleeveSpec
 from allocations.country_inputs import COUNTRY_INPUTS, LONG_RUN_EPS_GROWTH, ASIA
 
 
-def build_equity_specs(weights, seed=1, hedge_developed=0.5):
+# Share of each market's growth beta attributed to the EURO-AREA cycle under
+# growth_mode="split"; the remainder loads on the global cycle. ILLUSTRATIVE —
+# these are a reasoned split for the comparison run, NOT a calibration. Nobody
+# regressed these. See output/global_growth_factor_summary.md.
+EURO_CYCLE_SHARE = {
+    "Europe": 0.70,   # domestic cycle dominant, though EU corporates export heavily
+    "USA":    0.20,
+    "Japan":  0.15,
+    "Singapore": 0.10,
+    "China":  0.05, "India": 0.05, "Korea": 0.05,
+    "Taiwan": 0.05, "Indonesia": 0.05, "Vietnam": 0.05,
+}
+
+GROWTH_MODES = ("euro", "split", "global")
+
+
+def build_equity_specs(weights, seed=1, hedge_developed=0.5, growth_mode="euro"):
     """weights: {country: weight}, must sum ~1.0. hedge_developed = fraction of
-    USD/EUR-developed FX that is hedged (Asian FX left unhedged per §17 pt 5)."""
+    USD/EUR-developed FX that is hedged (Asian FX left unhedged per §17 pt 5).
+
+    growth_mode controls which growth cycle each country's `gbeta` loads on:
+
+      "euro"   (default, CURRENT BEHAVIOUR) — the whole beta loads on
+               state.growth, which is EURO-AREA growth. This is almost certainly
+               wrong: COUNTRY_INPUTS puts India at 0.75 and China at 0.70 against
+               Europe's 0.60, and Indian equities cannot plausibly respond more
+               strongly to euro-area growth than European equities do. That
+               ordering only makes sense against a GLOBAL cycle.
+      "split"  — beta is divided between the two cycles by EURO_CYCLE_SHARE,
+               preserving each country's TOTAL growth sensitivity so the
+               comparison isolates reallocation, not magnitude.
+      "global" — the whole beta loads on state.global_growth. Makes the existing
+               ordering coherent in one line, but leaves European equities with
+               no euro-cycle sensitivity at all, which is its own error.
+
+    Default is "euro" so no published number changes unless a caller opts in.
+    """
+    if growth_mode not in GROWTH_MODES:
+        raise ValueError(f"growth_mode must be one of {GROWTH_MODES}, got {growth_mode!r}")
     tot = sum(weights.values())
     assert abs(tot - 1.0) < 1e-6, f"weights sum to {tot}, not 1.0"
     specs = []
@@ -36,10 +72,18 @@ def build_equity_specs(weights, seed=1, hedge_developed=0.5):
         if w <= 0:
             continue
         inp = COUNTRY_INPUTS[country]
+        if growth_mode == "euro":
+            euro_share = 1.0
+        elif growth_mode == "global":
+            euro_share = 0.0
+        else:
+            euro_share = EURO_CYCLE_SHARE[country]
         sl = EquitySleeve(
             country,
             drift=inp["drift"],
-            growth_beta=inp["gbeta"],
+            growth_beta=inp["gbeta"] * euro_share,
+            global_growth_beta=inp["gbeta"] * (1.0 - euro_share),
+            market_beta=inp["mbeta"],
             inflation_beta=inp["ibeta"],
             idio_vol=inp["idio"],
             seed=seed + i,

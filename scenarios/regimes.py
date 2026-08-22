@@ -404,6 +404,24 @@ class RegimeSwitchingEngine:
         dt:             float = 1.0,
         seed:           Optional[int] = None,
     ) -> None:
+        # ------------------------------------------------------------------
+        # UNSUPPORTED since the macro state moved to eight variables (2026-08).
+        # ------------------------------------------------------------------
+        raise NotImplementedError(
+            "RegimeSwitchingEngine predates the eight-variable MacroState. All four "
+            "regime calibrations in this module still carry 7-element long_run_mean "
+            "and 7x7 phi/sigma, so simulate() fails with an opaque shape error deep "
+            "inside a matrix multiply ('size 8 is different from 7').\n\n"
+            "Nothing in the published exhibits uses this engine — they all run "
+            "through MacroScenarioEngine — so it was left unextended rather than "
+            "given four sets of unsourced global_growth parameters, which the "
+            "validation report flags provenance gaps for elsewhere.\n\n"
+            "To re-enable: extend _deflationary_boom / _deflationary_bust / "
+            "_inflationary_boom / _inflationary_bust to 8 variables, giving each "
+            "regime a defensible global_growth mean, persistence, volatility and "
+            "correlation block, then delete this guard and add the engine to "
+            "test_every_engine_in_the_codebase_can_take_a_step."
+        )
         self.spec           = spec
         self.initial_state  = initial_state
         self.initial_regime = initial_regime

@@ -9,6 +9,7 @@ Run from the repo root:  python -m allocations.preview
 """
 import numpy as np
 from allocations.country_inputs import COUNTRY_INPUTS, ASIA
+from scenarios.engine import EQUITY_FACTOR_VOL
 
 # FX tailwind per currency: annualised PPP-closure drift a EUR investor earns
 # (from FXModel: ppp_gap closing + carry + drift, approximate annualised).
@@ -19,7 +20,9 @@ FX_TAILWIND = {
     "INR":  0.005,  # high carry, RBI-managed; partial PPP
     "KRW":  0.012,  # undervalued free-floater (§13.4 strongest diversifier)
     "TWD":  0.006,  # CA surplus, semis
-    "THB":  0.008,  # ASEAN proxy (Indonesia/Vietnam)
+    "THB":  0.008,  # Thailand only (no longer stands in for Indonesia/Vietnam)
+    "IDR":  0.010,  # ILLUSTRATIVE: high BI carry net of a wider depreciation drift
+    "VND":  0.006,  # ILLUSTRATIVE: SBV carry net of managed crawling depreciation
     "SGD":  0.005,  # MAS managed appreciation
     None:   0.000,  # EUR base (Europe)
 }
@@ -39,11 +42,15 @@ def blended(weights):
     asia = sum(w for c, w in weights.items() if c in ASIA)
     china = weights.get("China", 0.0)
     usa = weights.get("USA", 0.0)
-    # crude vol proxy: common market factor 14% + idio, corr 0.75 across markets
+    # Single-factor blended vol, matching the model the simulation actually runs
+    # since 2026-08-22: vol^2 = (sum w*mbeta)^2 * var(F) + sum (w*idio)^2.
+    # Before that this function assumed a 14% common factor with 0.75 correlation
+    # while EquitySleeve had NO market factor at all and delivered ~0.01
+    # cross-country correlation — validation finding V-C3. The two now agree.
     idios = np.array([COUNTRY_INPUTS[c]["idio"] for c in weights])
+    mbetas = np.array([COUNTRY_INPUTS[c]["mbeta"] for c in weights])
     ws = np.array(list(weights.values()))
-    common = 0.14
-    vol = np.sqrt(0.75 * common**2 + np.sum((ws * idios)**2))  # simplified blended
+    vol = np.sqrt((ws @ mbetas) ** 2 * EQUITY_FACTOR_VOL ** 2 + np.sum((ws * idios) ** 2))
     return dict(asia=asia, china=china, usa=usa, er=er, fx=fx_eff, er_eur=er + fx_eff, vol=vol)
 
 
