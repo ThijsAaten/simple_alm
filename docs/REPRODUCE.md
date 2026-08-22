@@ -129,10 +129,12 @@ earlier use of Python's built-in `hash()` was salted per process and caused a
 The article source and its figure-build scripts live in the **article project**,
 which is a separate local repository and is not this model repo. It holds the
 unpublished manuscript, is **private and local-only** — no remote, and it should
-not be given a public one — and was placed under version control on 2026-08-22. The model here generates the participant-wealth
-exhibit; the CAPE-mapping, Markowitz and fiscal exhibits are built by the bundle's
-`scripts/`, which read the data workbook. See the bundle's own `README.md`. To
-rebuild the PDF once the exhibits are in place:
+not be given a public one — and was placed under version control on 2026-08-22.
+
+The model in *this* repository generates the participant-wealth exhibit (Exhibit 6);
+the CAPE-mapping, Markowitz and fiscal exhibits are built by the article project's
+own scripts, which read its data workbook. To rebuild the PDF once the exhibits are
+in place, from the article project's `article/` directory:
 
 ```bash
 bash build_article.sh asia_pension_allocation_article_v4_2026-08-22      # margin-note build
