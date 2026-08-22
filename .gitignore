@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Compiled bytecode
+# ---------------------------------------------------------------------------
+# These were tracked up to 0adf3bb. They are removed from the index in the same
+# commit that adds this file — committing bytecode means every source change
+# produces a spurious binary diff, which is part of why five rounds of work
+# produced an unreadable working tree.
+__pycache__/
+*.py[cod]
+
+# ---------------------------------------------------------------------------
+# Generated on every run
+# ---------------------------------------------------------------------------
+# The CGB sweep is rewritten by examples/run_cgb_dial.py each time it runs. The
+# FROZEN record that docs/VALIDATION_REPORT.md cites is committed separately as
+# output/validated_*.csv and must not be ignored.
+output/cgb_dial_sweep.csv
+output/cgb_dial_sweep_flat_lr.csv
+
+# ---------------------------------------------------------------------------
+# Local environment
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+.DS_Store
+.pytest_cache/
