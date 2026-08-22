@@ -14,6 +14,11 @@ __pycache__/
 # The CGB sweep is rewritten by examples/run_cgb_dial.py each time it runs. The
 # FROZEN record that docs/VALIDATION_REPORT.md cites is committed separately as
 # output/validated_*.csv and must not be ignored.
+# build_exhibit6_participant_wealth.py writes its figure to the current directory
+# when run from a clone, which is the repo root.
+exhibit6_participant_wealth.pdf
+exhibit6_participant_wealth.png
+
 output/cgb_dial_sweep.csv
 output/cgb_dial_sweep_flat_lr.csv
 
