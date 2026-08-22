@@ -195,22 +195,33 @@ def test_rsp_and_lhp_see_the_same_fx_rates_within_a_year():
                 f"({fx_a[cur]:.6%} vs {fx_b[cur]:.6%})")
 
 
-# Joint-regression loadings (assets/fx.py, 2026-08). Supersedes the univariate
-# table: those absorbed shared global-cycle exposure into the dollar coefficient.
+# Joint-regression loadings, DERIVED 2026-08-22 by calibration/fx_loading_calibration.py
+# from data/fx_levels.csv + data/fx_bloomberg_legs.csv + data/ret_usd.csv.
+#
+# Pinned EXTERNALLY on purpose. The point of pinning is that a re-run of the
+# calibration cannot silently drift the model: if the script and this table ever
+# disagree, test_calibration_script_reproduces_the_live_loadings fails and the
+# change has to be made deliberately.
+#
+# Supersedes a round-4 table whose b_usd column could not be reproduced from the
+# committed data under any specification or window (validation finding V-F1), and
+# whose origin was not recoverable from the repository, the git history or the
+# laptop. 17 loadings changed; global_growth_loading changed for none.
+#
 # ccy: (b_usd, resid_growth_beta, inflation_loading, growth_loading, global_growth_loading)
 DERIVED_LOADINGS = {
-    "USD": (1.000,  0.000, 0.50, -0.30,  0.00),
-    "HKD": (0.988,  0.001, 0.50, -0.30,  0.00),
-    "VND": (1.027,  0.024, 0.50, -0.30,  0.00),
-    "IDR": (0.997,  0.217, 0.50, -0.30,  0.15),
-    "INR": (0.938,  0.160, 0.45, -0.30,  0.10),
-    "CNY": (0.933,  0.039, 0.45, -0.30,  0.00),
-    "TWD": (0.863,  0.105, 0.45, -0.25,  0.05),
-    "THB": (0.814,  0.103, 0.40, -0.25,  0.05),
-    "KRW": (0.760,  0.262, 0.40, -0.25,  0.15),
-    "SGD": (0.720,  0.087, 0.35, -0.20,  0.05),
-    "GBP": (0.596,  0.122, 0.30, -0.20,  0.05),
-    "JPY": (0.447, -0.120, 0.20, -0.15, -0.05),
+    "USD": (1.000, +0.000, 0.50, -0.30, +0.00),
+    "HKD": (0.985, +0.001, 0.50, -0.30, +0.00),
+    "VND": (0.981, +0.024, 0.50, -0.30, +0.00),
+    "IDR": (0.565, +0.218, 0.30, -0.15, +0.15),
+    "INR": (0.621, +0.158, 0.30, -0.20, +0.10),
+    "CNY": (0.856, +0.038, 0.45, -0.25, +0.00),
+    "TWD": (0.655, +0.102, 0.35, -0.20, +0.05),
+    "THB": (0.610, +0.100, 0.30, -0.20, +0.05),
+    "KRW": (0.240, +0.258, 0.10, -0.05, +0.15),
+    "SGD": (0.547, +0.085, 0.25, -0.15, +0.05),
+    "GBP": (0.355, +0.119, 0.20, -0.10, +0.05),
+    "JPY": (0.686, -0.123, 0.35, -0.20, -0.05),
 }
 
 # CHF, CAD and AUD are absent from the FX dataset, so no joint regression exists.
@@ -229,6 +240,44 @@ def test_derived_loadings_match_the_published_table():
         assert abs(p.growth_loading - gl) < 1e-9, f"{ccy} growth {p.growth_loading} != {gl}"
         assert abs(p.global_growth_loading - ggl) < 1e-9, \
             f"{ccy} global_growth {p.global_growth_loading} != {ggl}"
+
+
+def test_calibration_script_reproduces_the_live_loadings():
+    """V-F1 guard. calibration/fx_loading_calibration.py must reproduce assets/fx.py.
+
+    The loadings are DERIVED, so the derivation and the model must not be allowed to
+    drift apart. This runs the real regression over the committed CSVs and asserts
+    every currency's three loadings match what the model carries, and that the
+    regression's own b_usd and residual growth beta match the pinned table to 3dp.
+
+    Fails on the pre-2026-08-22 state, where the live inflation_loading and
+    growth_loading came from a b_usd column that this script cannot produce
+    (KRW 0.760 published against 0.240 derived).
+    """
+    import sys as _sys
+    from pathlib import Path as _Path
+    cal = _Path(__file__).resolve().parents[1] / "calibration"
+    if str(cal) not in _sys.path:
+        _sys.path.insert(0, str(cal))
+    from fx_loading_calibration import calibrate
+    from assets.fx import _DEFAULT_CURRENCIES
+
+    tab = calibrate()
+    for ccy, (b_usd, resid, il, gl, ggl) in DERIVED_LOADINGS.items():
+        assert abs(tab.loc[ccy, "b_usd"] - b_usd) < 5e-4, (
+            f"{ccy}: regression b_usd {tab.loc[ccy,'b_usd']:.4f} != pinned {b_usd}")
+        assert abs(tab.loc[ccy, "resid_g"] - resid) < 5e-4, (
+            f"{ccy}: regression residual {tab.loc[ccy,'resid_g']:.4f} != pinned {resid}")
+        live = _DEFAULT_CURRENCIES[ccy]
+        for col, pinned, actual in (
+            ("inflation_loading", il, live.inflation_loading),
+            ("growth_loading", gl, live.growth_loading),
+            ("global_growth_loading", ggl, live.global_growth_loading),
+        ):
+            assert abs(tab.loc[ccy, col] - actual) < 1e-9, (
+                f"{ccy}.{col}: calibration says {tab.loc[ccy, col]}, "
+                f"assets/fx.py carries {actual} — derivation and model have drifted")
+            assert abs(pinned - actual) < 1e-9, f"{ccy}.{col}: pinned {pinned} != live {actual}"
 
 
 def test_no_negative_inflation_loading_outside_known_exceptions():
@@ -380,8 +429,19 @@ def test_model_implied_correlations_match_the_measured_betas():
         f"implied correlation for {worst_pair} differs by {worst:.4f} between the "
         f"stored loadings and the measured betas (tolerance {TOL}) — a loading "
         f"contradicts its own regression coefficient")
-    assert all(v > 0 for v in model.values()), \
-        "some currency pair is implied to co-move negatively against the EUR"
+    # No pair may co-move MATERIALLY negatively. A hard v > 0 was too strict once
+    # the loadings were re-derived (V-F1): KRW's dollar-tracking is genuinely near
+    # zero (b_usd 0.240, correlation 0.313), so its implied co-movement with the
+    # pure dollar-trackers is near zero too and its SIGN is numerically arbitrary.
+    # The eight negative pairs are all KRW's, spanning -0.00007 to -0.00206 — the
+    # cross-term between KRW's global-cycle loading and the dollar-trackers'
+    # negative euro-growth loading, since euro and global growth covary. The
+    # substantive check above (loadings must match their own regression
+    # coefficients, max diff 0.0044) is unaffected.
+    worst_neg = min(model.values())
+    assert worst_neg > -0.01, (
+        f"a currency pair is implied to co-move materially negatively against the "
+        f"EUR ({worst_neg:+.4f}) — that is a loading error, not rounding")
 
 
 def test_var_transition_matrix_is_stationary():

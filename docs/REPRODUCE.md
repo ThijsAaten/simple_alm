@@ -148,10 +148,14 @@ The FX loading regression is also runnable now:
 python calibration/fx_loading_calibration.py   # prints derived loadings AND their disagreement
 ```
 
-but it reproduces only one of its three columns. `global_growth_loading` matches exactly for
-all 12 currencies; `inflation_loading` and `growth_loading` do not, because both derive from a
-`b_usd` column that cannot be reproduced from this data. See **V-F1** in
-`docs/VALIDATION_REPORT.md`. Everything in the "Model output" rows above **is** fully
+and since 2026-08-22 it reproduces **all three** columns exactly — the loadings in
+`assets/fx.py` were re-derived from it (V-F1 resolved). A test asserts the script and the
+model cannot drift apart.
+
+**Current exhibit record: `output/fx_attribution.csv`, `output/fx_cgb_dial.csv`,
+`output/fx_pot_distributions.csv`**, produced by `python tools/rerun_multiseed.py 1000 fx`.
+They supersede `output/vm3_*.csv`, which remain committed as the previous record. See
+`output/fx_loadings_rerun_summary.md`. Everything in the "Model output" rows above **is** fully
 reproducible from this repository.
 
 ## Regenerating Exhibit 6

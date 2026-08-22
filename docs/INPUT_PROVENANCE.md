@@ -441,7 +441,7 @@ The six correlations between the factor and the macro innovations are **Judgemen
 
 | Column | Status | Source |
 |---|---|---|
-| `inflation_loading`, `growth_loading`, `global_growth_loading` | **Derived** (12 currencies) | One joint regression per currency: EUR-cross monthly log return on `[USD EUR-cross, MSCI World EUR]`, 2001–2026. `0.50 × b_usd`, `−0.30 × b_usd`, `0.60 × residual growth beta`, each rounded to 0.05. Full table and validation in `assets/fx.py` |
+| `inflation_loading`, `growth_loading`, `global_growth_loading` | **Derived, reproducible** (12 currencies) | One joint regression per currency: EUR-cross monthly log return on `[USD EUR-cross, MSCI World EUR]`, 2001–2026. `0.50 × b_usd`, `−0.30 × b_usd`, `0.60 × residual growth beta`, each rounded to 0.05. Full table and validation in `assets/fx.py` |
 | The same three | Judgement (CHF, CAD, AUD) | **Un-derived** — absent from the FX dataset. CHF's −0.30 inflation loading is the last remaining negative and contradicts its own comment (V-D5) |
 | `idio_vol` for IDR | **Derived** | 11.1% annualised, measured on the same sample |
 | `carry_spread`, `fx_drift`, `ppp_reversion`, `initial_ppp_gap`, `idio_vol` (all others) | Judgement | **No source for any of the 74.** These drive the FX tailwind central to the unhedged-overlay thesis |
@@ -450,9 +450,21 @@ The derivation is validated at one point: CNY's measured dollar correlation of 0
 reproduces the 0.92 the article publishes independently. That validates the *method*, not
 each of the 36 loadings.
 
-**Status of the FX loadings, updated 2026-08-22.** The source data is complete and the
-regression script is committed (`calibration/fx_loading_calibration.py`), so the derivation
-is now runnable. The result splits:
+**Status of the FX loadings — all three columns Derived and reproducible (2026-08-22).**
+`calibration/fx_loading_calibration.py`, run on `data/fx_levels.csv`,
+`data/fx_bloomberg_legs.csv` and `data/ret_usd.csv`, reproduces every loading in
+`assets/fx.py` to three decimals, and a test asserts that it continues to.
+
+This replaced a round-4 `b_usd` column that could not be reproduced from the committed data
+under any specification or window, and whose origin was **not recoverable** from the
+repository, the full git history, or the laptop (validation finding V-F1). 17 loadings
+changed — 8 inflation, 9 growth; `global_growth_loading` changed for none. The superseded
+values are recorded inline in each changed entry in `assets/fx.py`.
+
+Note also the **round-3 / round-4 inconsistency** this exposed: the round-3 univariate column
+reproduces here exactly (KRW 0.300, IDR 0.615, CNY 0.865) while the round-4 table claimed
+0.760, 0.997 and 0.933 for the same three currencies on the same data and window. Both were
+described as a beta against the USD. Only round-3's is reproducible.
 
 | Column | Status |
 |---|---|

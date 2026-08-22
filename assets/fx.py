@@ -170,9 +170,13 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.005,   # BoE slightly above ECB on average
         fx_drift           = -0.005,   # mild depreciation bias (post-Brexit structural damage)
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.596   residual growth beta +0.122 (t +4.8)
-        inflation_loading     =   0.30,   # 0.50 x b_usd
-        growth_loading        =  -0.20,   # -0.30 x b_usd  (EURO growth)
+        #   b_usd 0.355   residual growth beta +0.119 (t +4.7)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.30 -> +0.20, growth_loading -0.20 -> -0.10
+        #   superseded b_usd 0.596 -> 0.355; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.20,   # 0.50 x b_usd
+        growth_loading        =  -0.10,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.05,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.10,
         initial_ppp_gap    = -0.05,    # slight undervaluation post-Brexit
@@ -226,10 +230,14 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       = -0.008,   # BOJ rates deeply negative / near-zero vs ECB
         fx_drift           =  0.003,   # long-run appreciation bias despite low carry
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.447   residual growth beta -0.120 (t -3.3)
+        #   b_usd 0.686   residual growth beta -0.123 (t -3.4)
         # NEGATIVE cycle beta: the safe-haven bid, measured
-        inflation_loading     =   0.20,   # 0.50 x b_usd
-        growth_loading        =  -0.15,   # -0.30 x b_usd  (EURO growth)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.20 -> +0.35, growth_loading -0.15 -> -0.20
+        #   superseded b_usd 0.447 -> 0.686; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.35,   # 0.50 x b_usd
+        growth_loading        =  -0.20,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =  -0.05,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.08,    # BOJ intervention slows PPP convergence
         initial_ppp_gap    = -0.25,    # JPY historically ~25 % undervalued vs EUR on PPP
@@ -240,10 +248,14 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.005,   # PBOC policy rate ≈ EUR neutral in long run
         fx_drift           =  0.005,   # managed appreciation as China moves up value chain
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.933   residual growth beta +0.039 (t +2.9)
+        #   b_usd 0.856   residual growth beta +0.038 (t +2.8)
         # significant but tiny: 0.039*0.60 rounds to zero
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.45 -> +0.45, growth_loading -0.30 -> -0.25
+        #   superseded b_usd 0.933 -> 0.856; the old value's
+        #   origin is not recoverable (V-F1).
         inflation_loading     =   0.45,   # 0.50 x b_usd
-        growth_loading        =  -0.30,   # -0.30 x b_usd  (EURO growth)
+        growth_loading        =  -0.25,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.00,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.12,
         initial_ppp_gap    = -0.20,    # Balassa-Samuelson undervaluation in rapidly developing economy
@@ -253,7 +265,7 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.015,   # currency board pegged to USD; USD carry passes through
         fx_drift           =  0.000,   # peg → no secular trend vs USD; vs EUR tracks USD drift
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.988   residual growth beta +0.001 (t +0.4)
+        #   b_usd 0.985   residual growth beta +0.001 (t +0.3)
         # currency board: zero independent cycle, as it should be
         inflation_loading     =   0.50,   # 0.50 x b_usd
         growth_loading        =  -0.30,   # -0.30 x b_usd  (EURO growth)
@@ -267,10 +279,14 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.005,
         fx_drift           =  0.005,   # persistent current-account surplus → appreciation
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.863   residual growth beta +0.105 (t +5.8)
+        #   b_usd 0.655   residual growth beta +0.102 (t +5.7)
         # semiconductor cycle, now in the right column
-        inflation_loading     =   0.45,   # 0.50 x b_usd
-        growth_loading        =  -0.25,   # -0.30 x b_usd  (EURO growth)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.45 -> +0.35, growth_loading -0.25 -> -0.20
+        #   superseded b_usd 0.863 -> 0.655; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.35,   # 0.50 x b_usd
+        growth_loading        =  -0.20,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.05,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.12,
         initial_ppp_gap    = -0.20,    # structural undervaluation; government manages pace
@@ -281,10 +297,14 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.015,
         fx_drift           =  0.003,
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.760   residual growth beta +0.262 (t +8.4)
+        #   b_usd 0.240   residual growth beta +0.258 (t +8.4)
         # largest independent cycle in the set (t=8.4)
-        inflation_loading     =   0.40,   # 0.50 x b_usd
-        growth_loading        =  -0.25,   # -0.30 x b_usd  (EURO growth)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.40 -> +0.10, growth_loading -0.25 -> -0.05
+        #   superseded b_usd 0.760 -> 0.240; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.10,   # 0.50 x b_usd
+        growth_loading        =  -0.05,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.15,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.12,
         initial_ppp_gap    = -0.15,    # moderate undervaluation; more open than CNY/TWD
@@ -295,9 +315,13 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.005,
         fx_drift           =  0.005,   # MAS uses managed appreciation as monetary policy tool
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.720   residual growth beta +0.087 (t +6.0)
-        inflation_loading     =   0.35,   # 0.50 x b_usd
-        growth_loading        =  -0.20,   # -0.30 x b_usd  (EURO growth)
+        #   b_usd 0.547   residual growth beta +0.085 (t +5.9)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.35 -> +0.25, growth_loading -0.20 -> -0.15
+        #   superseded b_usd 0.720 -> 0.547; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.25,   # 0.50 x b_usd
+        growth_loading        =  -0.15,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.05,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.10,
         initial_ppp_gap    = -0.10,
@@ -308,9 +332,13 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.010,
         fx_drift           =  0.000,
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.814   residual growth beta +0.103 (t +4.5)
-        inflation_loading     =   0.40,   # 0.50 x b_usd
-        growth_loading        =  -0.25,   # -0.30 x b_usd  (EURO growth)
+        #   b_usd 0.610   residual growth beta +0.100 (t +4.4)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.40 -> +0.30, growth_loading -0.25 -> -0.20
+        #   superseded b_usd 0.814 -> 0.610; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.30,   # 0.50 x b_usd
+        growth_loading        =  -0.20,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.05,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.12,
         initial_ppp_gap    = -0.15,
@@ -324,10 +352,14 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
                                        # above ECB; set just above INR's 0.030
         fx_drift           = -0.020,   # JUDGEMENT: persistent nominal depreciation on
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.997   residual growth beta +0.217 (t +5.8)
+        #   b_usd 0.565   residual growth beta +0.218 (t +5.9)
         # commodity exporter; strong independent cycle
-        inflation_loading     =   0.50,   # 0.50 x b_usd
-        growth_loading        =  -0.30,   # -0.30 x b_usd  (EURO growth)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.50 -> +0.30, growth_loading -0.30 -> -0.15
+        #   superseded b_usd 0.997 -> 0.565; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.30,   # 0.50 x b_usd
+        growth_loading        =  -0.15,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.15,   # 0.60 x residual  (GLOBAL growth)
                                        # an inflation differential wider than India's
         ppp_reversion      =  0.12,    # JUDGEMENT
@@ -339,7 +371,7 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.030,   # JUDGEMENT: SBV rates above ECB
         fx_drift           = -0.020,   # JUDGEMENT: managed crawling depreciation
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 1.027   residual growth beta +0.024 (t +1.9)
+        #   b_usd 0.981   residual growth beta +0.024 (t +2.0)
         # t=1.9, not significant -> 0.00; a managed peg, see below
         inflation_loading     =   0.50,   # 0.50 x b_usd
         growth_loading        =  -0.30,   # -0.30 x b_usd  (EURO growth)
@@ -354,9 +386,13 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         carry_spread       =  0.030,   # RBI rates well above ECB
         fx_drift           = -0.015,   # nominal depreciation trend (higher domestic inflation)
         # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
-        #   b_usd 0.938   residual growth beta +0.160 (t +6.4)
-        inflation_loading     =   0.45,   # 0.50 x b_usd
-        growth_loading        =  -0.30,   # -0.30 x b_usd  (EURO growth)
+        #   b_usd 0.621   residual growth beta +0.158 (t +6.4)
+        # DERIVED 2026-08-22, calibration/fx_loading_calibration.py.
+        #   inflation_loading +0.45 -> +0.30, growth_loading -0.30 -> -0.20
+        #   superseded b_usd 0.938 -> 0.621; the old value's
+        #   origin is not recoverable (V-F1).
+        inflation_loading     =   0.30,   # 0.50 x b_usd
+        growth_loading        =  -0.20,   # -0.30 x b_usd  (EURO growth)
         global_growth_loading =   0.10,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.15,
         initial_ppp_gap    = -0.10,    # undervalued in real terms despite nominal depreciation
@@ -375,19 +411,19 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
 #     growth_loading (EUR)   = -0.30 x b_usd            rounded to 0.05
 #     global_growth_loading  =  0.60 x b_g (residual)   rounded to 0.05
 #
-#   ccy  b_usd  resid_g     t    infl   growth  global
-#   USD  1.000   0.000     —     0.50   -0.30    0.00
-#   HKD  0.988   0.001    0.4    0.50   -0.30    0.00
-#   VND  1.027   0.024    1.9    0.50   -0.30    0.00
-#   IDR  0.997   0.217    5.8    0.50   -0.30    0.15
-#   INR  0.938   0.160    6.4    0.45   -0.30    0.10
-#   CNY  0.933   0.039    2.9    0.45   -0.30    0.00
-#   TWD  0.863   0.105    5.8    0.45   -0.25    0.05
-#   THB  0.814   0.103    4.5    0.40   -0.25    0.05
-#   KRW  0.760   0.262    8.4    0.40   -0.25    0.15
-#   SGD  0.720   0.087    6.0    0.35   -0.20    0.05
-#   GBP  0.596   0.122    4.8    0.30   -0.20    0.05
-#   JPY  0.447  -0.120   -3.3    0.20   -0.15   -0.05
+#   ccy  b_usd  resid_g     t    corr    infl   growth  global   (was infl/grow)
+#   USD  1.000  +0.000    —    1.000   0.50   -0.30   +0.00
+#   HKD  0.985  +0.001   +0.3  0.997   0.50   -0.30   +0.00
+#   VND  0.981  +0.024   +2.0  0.951   0.50   -0.30   +0.00
+#   IDR  0.565  +0.218   +5.9  0.510   0.30   -0.15   +0.15   (0.50/-0.30)
+#   INR  0.621  +0.158   +6.4  0.686   0.30   -0.20   +0.10   (0.45/-0.30)
+#   CNY  0.856  +0.038   +2.8  0.923   0.45   -0.25   +0.00   (0.45/-0.30)
+#   TWD  0.655  +0.102   +5.7  0.804   0.35   -0.20   +0.05   (0.45/-0.25)
+#   THB  0.610  +0.100   +4.4  0.713   0.30   -0.20   +0.05   (0.40/-0.25)
+#   KRW  0.240  +0.258   +8.4  0.313   0.10   -0.05   +0.15   (0.40/-0.25)
+#   SGD  0.547  +0.085   +5.9  0.813   0.25   -0.15   +0.05   (0.35/-0.20)
+#   GBP  0.355  +0.119   +4.7  0.483   0.20   -0.10   +0.05   (0.30/-0.20)
+#   JPY  0.686  -0.123   -3.4  0.559   0.35   -0.20   -0.05   (0.20/-0.15)
 #
 # THE 0.60 CONVERSION IS THE WEAKEST LINK. b_g is an EQUITY-RETURN beta; the
 # model needs a GROWTH-DEVIATION loading. 0.60 is EquitySleeve's growth_beta,
@@ -399,14 +435,29 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
 # is robust (it comes straight from b_g); the LEVEL is not. Treat the global
 # column as ordinally reliable and cardinally soft.
 #
-# WHY JOINT ESTIMATION MATTERS — this supersedes the univariate loadings applied
-# in the previous round. Those regressed only on the USD, so shared global-cycle
-# exposure was absorbed into b_usd. Controlling for growth moves several
-# materially: KRW 0.15 -> 0.40, IDR 0.30 -> 0.50, TWD 0.35 -> 0.45, JPY 0.35 ->
-# 0.20. The two columns HAVE to be estimated together, and the fact that they
-# could contradict each other at all — CNY tracking the dollar at 0.93 for
-# inflation while opposing it at +0.30 for growth — is a direct consequence of
-# their having been set independently, by argument rather than by measurement.
+# PROVENANCE OF THIS TABLE (rewritten 2026-08-22, validation finding V-F1).
+# Every value above is now produced by calibration/fx_loading_calibration.py from
+# data/fx_levels.csv, data/fx_bloomberg_legs.csv and data/ret_usd.csv. Run it and
+# it reproduces this table to three decimals; a test asserts that it does.
+#
+# It replaces a b_usd column whose origin could not be recovered. That column was
+# searched for across the repository, the full git history including dangling
+# objects, and the laptop: the values 0.760 / 0.997 / 0.447 appear nowhere except
+# in the simple_alm files that recorded them. No script, notebook or intermediate
+# artefact produced them. They were also inconsistent with the ROUND-3 univariate
+# column measured on the same data and window — that column reproduces exactly
+# here (KRW 0.300, IDR 0.615, CNY 0.865) while the superseded round-4 table
+# claimed 0.760, 0.997 and 0.933 for the same three currencies, both described as
+# a beta against the USD.
+#
+# 17 loadings changed (8 inflation, 9 growth). global_growth_loading did NOT
+# change for any currency — it derives from the residual growth beta of the same
+# regression and already reproduced exactly, which is what established that the
+# data and specification were right and only b_usd was wrong.
+#
+# MEASURED EFFECT: none beyond seed noise. Every attribution waypoint and the CGB
+# dial moved inside one seed standard deviation. See
+# output/fx_loadings_rerun_summary.md.
 #
 # CONVENTION CHECKS the table must satisfy (enforced in tests/test_invariants.py):
 #   * every inflation_loading  > 0   (euro-specific debasement lifts all others)

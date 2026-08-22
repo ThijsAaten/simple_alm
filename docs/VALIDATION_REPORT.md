@@ -36,7 +36,7 @@ silently.
 | V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — **re-measured after V-M3: now material, not a symptom** (+64% / −30% mean vs 11% baseline sd) | Yes, if corrected |
 | V-P1 | Major | `Portfolio` built its LHP with no FX model; LHP currency returns silently dropped to zero | **RESOLVED 2026-08-22** | No (no exhibit uses that path) |
 | V-R1 | Major | `scenarios/regimes.py` carried 7-variable calibrations against the 8-variable state | **RESOLVED 2026-08-22** | No (unreferenced) |
-| **V-F1** | **Major** | The `b_usd` column behind 24 of the 36 FX loadings cannot be reproduced from the committed data | No — flagged, loadings unchanged | **No — measured, all changes within seed noise** |
+| **V-F1** | **Major** | The `b_usd` column behind 24 of the 36 FX loadings cannot be reproduced from the committed data | **RESOLVED 2026-08-22** — 17 loadings re-derived | No — all changes within seed noise |
 | V-m1…m7 | Minor | Seven documentation / latent-risk defects | 3 fixed, 4 recorded | No |
 | V-D1…D6 | Design | Six judgement calls, including all five known-open items | Recommendations only | — |
 
@@ -286,9 +286,9 @@ the scenario's stated "12-year window" would need restating.
 
 ---
 
-## V-F1 — the FX `b_usd` column is not reproducible (found 2026-08-22)
+## V-F1 — the FX `b_usd` column is not reproducible — **RESOLVED 2026-08-22**
 
-**Severity: Major.** The loadings may be right; they cannot be traced. Nothing is changed.
+**Severity: Major.** Resolved by re-deriving the affected loadings from the committed data.
 
 **Context.** `data/fx_bloomberg_legs.csv` completed the FX source data, so the loading
 regression could finally be attempted. `calibration/fx_loading_calibration.py` now implements
@@ -339,30 +339,41 @@ for the same three currencies. Both were described as a beta against the USD.
 `growth_loading` values would change — KRW 0.40 → 0.10, IDR 0.50 → 0.30, JPY 0.20 → 0.35
 (the opposite direction). `global_growth_loading` would not change at all.
 
-**Measured impact: none beyond noise.** Re-deriving all 17 differing loadings and re-running
-both exhibits, 3 seeds at N=1000:
+### Resolution
 
-| | Baseline committed → re-derived | Repression committed → re-derived |
-|---|---|---|
-| (ii) +Re-anchor | +103.6 ± 4.3 → +102.9 ± 4.7 | +79.6 ± 1.7 → +79.4 ± 2.9 |
-| (iii) +China cap | +2.4 ± 1.4 → +2.8 ± 0.6 | +2.9 ± 1.3 → +1.4 ± 3.0 |
-| (iv) +Bond side | +26.8 ± 2.4 → +26.0 ± 1.4 | +40.0 ± 1.7 → +41.0 ± 2.6 |
-| CGB Δ(5%) | −6.3 ± 3.4 → −4.8 ± 1.2 | +2.9 ± 2.5 → +1.7 ± 1.2 |
+`calibration/fx_loading_calibration.py` was committed and its output applied.
+**17 loadings changed — 8 `inflation_loading` and 9 `growth_loading`:**
 
-**Every change is inside one seed standard deviation**, the largest being −1.5k on the
-China-cap step under repression. The loadings enter only through mean-zero deviation terms on
-a modest unhedged-FX share of the portfolio, and the individual currency changes partly
-offset. So this is a **provenance defect, not a numerical one**.
+| ccy | inflation_loading | growth_loading | b_usd |
+|---|---|---|---|
+| IDR | 0.50 → **0.30** ↓ | -0.30 → **-0.15** ↑ | 0.997 → 0.565 |
+| INR | 0.45 → **0.30** ↓ | -0.30 → **-0.20** ↑ | 0.938 → 0.621 |
+| CNY | unchanged | -0.30 → **-0.25** ↑ | 0.933 → 0.856 |
+| TWD | 0.45 → **0.35** ↓ | -0.25 → **-0.20** ↑ | 0.863 → 0.655 |
+| THB | 0.40 → **0.30** ↓ | -0.25 → **-0.20** ↑ | 0.814 → 0.610 |
+| KRW | 0.40 → **0.10** ↓ | -0.25 → **-0.05** ↑ | 0.760 → 0.240 |
+| SGD | 0.35 → **0.25** ↓ | -0.20 → **-0.15** ↑ | 0.720 → 0.547 |
+| GBP | 0.30 → **0.20** ↓ | -0.20 → **-0.10** ↑ | 0.596 → 0.355 |
+| JPY | 0.20 → **0.35** ↑ | -0.15 → **-0.20** ↓ | 0.447 → 0.686 |
 
-**Not changed, but the recommendation is now to change it.** Because adopting the derived
-values costs nothing measurable, doing so would move 24 loadings from "cannot be traced" to
-"reproducible from committed data and a committed script", closing the last provenance gap in
-the model at no cost to any exhibit. That is a good trade — but it is still a decision about
-17 live parameters and belongs to the repository owner, not to a calibration run.
-`python calibration/fx_loading_calibration.py` prints the comparison and exits without
-touching `assets/fx.py`.
+Every change but JPY's moves the **same way**: loadings fall, because the superseded `b_usd`
+overstated dollar-tracking for every currency except the yen. JPY moves the other way, up.
+`global_growth_loading` changed for **no** currency.
 
----
+**Origin of the superseded values: not recoverable.** Searched the working tree, the complete
+git history including dangling objects and stashes, the article build kit, and the laptop.
+The triple 0.760 / 0.997 / 0.447 appears nowhere outside the `simple_alm` files that recorded
+it — no script, notebook or intermediate artefact. Recorded as unrecoverable rather than
+guessed at.
+
+**Measured effect: none.** Five seeds for the attribution, three for the dial: every waypoint
+and both dial figures inside one seed standard deviation, largest |t| = 1.6 on the smallest
+step. See `output/fx_loadings_rerun_summary.md`; `output/fx_*.csv` are now the current record.
+
+**Guarded by** `test_calibration_script_reproduces_the_live_loadings`, which runs the real
+regression over the committed CSVs and asserts it still reproduces `assets/fx.py`. Verified
+to fail on the pre-change state.
+
 
 ## Resolved after the validation pass
 
