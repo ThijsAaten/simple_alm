@@ -1,5 +1,28 @@
 # Reproduce
 
+> ## File-naming rule for the article
+>
+> **The date in the filename is the VERSION date. New content means a new name.
+> There is exactly one live master.**
+>
+> Applied 2026-08-22. Before that, four different documents — 921, 962, 1,059 and
+> 1,289 lines — all carried the name `..._v4_2026-05-15.md`, because the date had
+> drifted into meaning "the date the v4 branch opened" rather than "the date of
+> this content". That makes it impossible to tell which file an exhibit or a
+> review was built against.
+>
+> Current state:
+>
+> | File | Lines | Status |
+> |---|---:|---|
+> | `article/asia_pension_allocation_article_v4_2026-08-22.md` | 1,289 | **live master** (contains §13.11) |
+> | `_archive/asia_pension_allocation_article_v4_2026-08-14.md` | 1,059 | superseded |
+>
+> Superseded versions go to `_archive/` under their own version date. `build_article.sh`
+> takes the basename as its first argument, so a rename needs no change to the script —
+> only to the invocation, and to this file.
+
+
 A runbook for reproducing the participant-wealth results from a clean clone. The
 model is fully synthetic (Monte Carlo from sleeve parameters — no market-data
 files needed) and, since the seeding fix below, deterministic across machines.
@@ -103,15 +126,17 @@ earlier use of Python's built-in `hash()` was salted per process and caused a
 
 ## Rebuilding the article PDF and exhibits
 
-The article source and its figure-build scripts live in the **article working
-bundle** (not this model repo). The model here generates the participant-wealth
+The article source and its figure-build scripts live in the **article project**,
+which is a separate local repository and is not this model repo. It holds the
+unpublished manuscript, is **private and local-only** — no remote, and it should
+not be given a public one — and was placed under version control on 2026-08-22. The model here generates the participant-wealth
 exhibit; the CAPE-mapping, Markowitz and fiscal exhibits are built by the bundle's
 `scripts/`, which read the data workbook. See the bundle's own `README.md`. To
 rebuild the PDF once the exhibits are in place:
 
 ```bash
-bash build_article.sh asia_pension_allocation_article_v4_2026-05-15      # margin-note build
-bash build_article_faj.sh asia_pension_allocation_article_v4_2026-05-15  # FAJ two-column
+bash build_article.sh asia_pension_allocation_article_v4_2026-08-22      # margin-note build
+bash build_article_faj.sh asia_pension_allocation_article_v4_2026-08-22  # FAJ two-column
 ```
 
 Requires pandoc 3.x, xelatex (TeX Live 2023+), python3. See `docs/INPUT_PROVENANCE.md`
