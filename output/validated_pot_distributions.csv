@@ -1,0 +1,12 @@
+# Pot distribution before/after the V-C1 reseeding fix (EUR000 real pot at retirement) | commit 0adf3bb | 2026-08-21 | N=1000 | seeds=[42] | regenerated for docs/VALIDATION_REPORT.md
+# 'before' reproduces the pre-validation defect: _reseed_specs guarded on _rng only, so every
+# scenario reused one frozen idiosyncratic path for all equity / RealAssets / Commodities sleeves.
+reseeding,allocation,world,p5,p25,p50,p75,p95,mean,sd,p95_over_p5
+before_VC1_factor_sleeves_frozen,CURRENT,baseline,934.804,1092.327,1213.928,1373.398,1618.568,1242.216,210.695,1.7315
+before_VC1_factor_sleeves_frozen,CURRENT,repression,768.201,879.23,976.468,1086.384,1254.257,988.7,151.118,1.6327
+before_VC1_factor_sleeves_frozen,PROPOSED_A,baseline,1070.546,1250.814,1388.169,1577.21,1855.604,1423.966,240.985,1.7333
+before_VC1_factor_sleeves_frozen,PROPOSED_A,repression,877.515,1006.102,1115.757,1244.901,1445.145,1132.861,173.412,1.6469
+after_VC1_all_sleeves_reseeded,CURRENT,baseline,929.076,1155.73,1348.365,1575.796,2018.106,1390.223,330.513,2.1722
+after_VC1_all_sleeves_reseeded,CURRENT,repression,761.178,925.142,1082.554,1238.43,1564.918,1100.587,245.346,2.0559
+after_VC1_all_sleeves_reseeded,PROPOSED_A,baseline,1041.535,1255.317,1466.641,1696.243,2140.371,1509.468,345.975,2.055
+after_VC1_all_sleeves_reseeded,PROPOSED_A,repression,847.498,1004.523,1168.163,1347.058,1672.787,1194.805,255.896,1.9738

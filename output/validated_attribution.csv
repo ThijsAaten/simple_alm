@@ -1,0 +1,43 @@
+# Nested attribution, per seed (levels and marginal deltas, EUR000 real pot at retirement) | commit 0adf3bb | 2026-08-21 | N=1000 | seeds=[42, 137, 271, 314, 577] | regenerated for docs/VALIDATION_REPORT.md
+# published_delta: 5-seed MEAN as reported before validation. For step (i) it is a LEVEL, not a delta.
+step,world,seed,level,marginal_delta,published_delta
+(i)   Current,baseline,42,1324.921,,1179.4
+(ii)  +Re-anchor,baseline,42,1440.591,115.67,172.5
+(iii) +China cap,baseline,42,1441.083,0.492,-2.6
+(iv)  +Bond side,baseline,42,1466.641,25.558,23.2
+(i)   Current,repression,42,1038.371,,918.3
+(ii)  +Re-anchor,repression,42,1125.955,87.585,135.2
+(iii) +China cap,repression,42,1122.544,-3.412,-2.6
+(iv)  +Bond side,repression,42,1168.163,45.619,43.2
+(i)   Current,baseline,137,1323.924,,1179.4
+(ii)  +Re-anchor,baseline,137,1439.638,115.714,172.5
+(iii) +China cap,baseline,137,1427.739,-11.899,-2.6
+(iv)  +Bond side,baseline,137,1457.07,29.331,23.2
+(i)   Current,repression,137,1031.437,,918.3
+(ii)  +Re-anchor,repression,137,1120.15,88.714,135.2
+(iii) +China cap,repression,137,1113.842,-6.308,-2.6
+(iv)  +Bond side,repression,137,1157.48,43.637,43.2
+(i)   Current,baseline,271,1323.329,,1179.4
+(ii)  +Re-anchor,baseline,271,1448.49,125.161,172.5
+(iii) +China cap,baseline,271,1446.798,-1.693,-2.6
+(iv)  +Bond side,baseline,271,1469.731,22.933,23.2
+(i)   Current,repression,271,1031.921,,918.3
+(ii)  +Re-anchor,repression,271,1123.082,91.161,135.2
+(iii) +China cap,repression,271,1123.426,0.344,-2.6
+(iv)  +Bond side,repression,271,1166.587,43.16,43.2
+(i)   Current,baseline,314,1343.934,,1179.4
+(ii)  +Re-anchor,baseline,314,1446.821,102.887,172.5
+(iii) +China cap,baseline,314,1448.473,1.652,-2.6
+(iv)  +Bond side,baseline,314,1480.663,32.19,23.2
+(i)   Current,repression,314,1046.106,,918.3
+(ii)  +Re-anchor,repression,314,1129.282,83.176,135.2
+(iii) +China cap,repression,314,1126.488,-2.794,-2.6
+(iv)  +Bond side,repression,314,1174.559,48.071,43.2
+(i)   Current,baseline,577,1343.319,,1179.4
+(ii)  +Re-anchor,baseline,577,1462.366,119.047,172.5
+(iii) +China cap,baseline,577,1459.48,-2.886,-2.6
+(iv)  +Bond side,baseline,577,1486.836,27.355,23.2
+(i)   Current,repression,577,1039.311,,918.3
+(ii)  +Re-anchor,repression,577,1128.804,89.493,135.2
+(iii) +China cap,repression,577,1126.221,-2.583,-2.6
+(iv)  +Bond side,repression,577,1167.29,41.069,43.2
