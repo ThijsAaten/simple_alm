@@ -7,19 +7,31 @@ equity factor: market_beta per country and the residual idio_vol that reproduces
 total volatility.
 
 Returns are converted to LOCAL currency first (MSCI USD series un-crossed through the USD
-legs in fx_levels.pkl), because the model handles currency separately via FXModel. Using
+legs in fx_levels.csv), because the model handles currency separately via FXModel. Using
 EUR or USD returns would fold a common currency term into the equity factor structure.
+
+Run from the repo root:
+
+    python calibration/equity_factor_calibration.py
+
+Reproduces the market_beta / idio_vol table in allocations/country_inputs.py and the 15.5%
+factor volatility in scenarios/engine.py, to the three decimals those files state.
 """
 import pandas as pd, numpy as np, statsmodels.api as sm
+from pathlib import Path
 
-U = "/mnt/user-data/uploads"
+# Repo-relative since 2026-08-22. Previously an absolute path outside the
+# repository, which made this derivation unreproducible from a clean clone; the
+# source is now CSV under data/ (see calibration/convert_source_data.py for why
+# CSV rather than the original pickles).
+U = Path(__file__).resolve().parents[1] / "data"
 MAP = {"Japan": "JPY", "China": "CNY", "India": "INR", "Korea": "KRW", "Taiwan": "TWD"}
 
 
 def local_returns():
-    r = pd.read_pickle(f"{U}/ret_usd.pkl")
+    r = pd.read_csv(U / "ret_usd.csv", index_col=0, parse_dates=True)
     r.index = pd.to_datetime(r.index).to_period("M").to_timestamp("M")
-    fx = pd.read_pickle(f"{U}/fx_levels.pkl")
+    fx = pd.read_csv(U / "fx_levels.csv", index_col=0, parse_dates=True)
     fx.index = pd.to_datetime(fx.index).to_period("M").to_timestamp("M")
     per_usd = pd.DataFrame({c: fx[c] / fx["USD"] for c in MAP.values()})
     out = {m: (1 + r[m]) * (1 + per_usd[c].pct_change()) - 1 for m, c in MAP.items()}

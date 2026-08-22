@@ -358,12 +358,14 @@ not move the world aggregate. Reasoned, sanity-checked, not measured.
 | ρ(F, `credit_spread`) | -0.35 | — | Judgement |
 | ρ(F, `global_growth`) | +0.30 | — | Judgement |
 
-The factor volatility is **Derived** — `calibration/equity_factor_calibration.py` computes it
-directly from MSCI World monthly returns 2001–2025. **The script cannot be re-run from a
-clean clone**: it reads `ret_usd.pkl` and `fx_levels.pkl` from an absolute path outside the
-repository. See `calibration/README.md`. What was verified without that data is that the
-resulting table is internally consistent — `market_beta² × var(F) + idio_vol²` reproduces
-every stated total volatility to 0.001 and every R² to 2dp.
+The factor volatility is **Derived and reproducible**. Run
+`python calibration/equity_factor_calibration.py`: it reads `data/ret_usd.csv` and
+`data/fx_levels.csv` and reproduces this value, the full `market_beta` / `idio_vol` table and
+the documented worst-fitting pairs, under the repository's own numpy 1.26.
+
+*(Before 2026-08-22 the source data sat outside the repository as numpy-2.x pickles that the
+declared environment could not even read, and these inputs were recorded as Derived-but-not-
+re-runnable. The data is now committed as CSV; see `data/README.md`.)*
 
 The six correlations between the factor and the macro innovations are **Judgement**.
 
@@ -388,7 +390,7 @@ The six correlations between the factor and the macro innovations are **Judgemen
 |---|---|---|
 | `drift`, `cape_now`, `cape_fair` | **Article** (8 markets) | §3.1 Table 1a — see the table earlier in this file |
 | `drift`, `cape_now`, `cape_fair` | Judgement (Vietnam, Singapore) | Not in §3.1; illustrative dials, flagged `real=False` |
-| `mbeta`, `idio` | **Derived** (7 markets) | `calibration/equity_factor_calibration.py`, regression on MSCI World in local currency |
+| `mbeta`, `idio` | **Derived, reproducible** (7 markets) | `calibration/equity_factor_calibration.py` on `data/ret_usd.csv` + `data/fx_levels.csv` |
 | `mbeta`, `idio` | Judgement (Indonesia, Vietnam, Singapore) | Assigned by analogy; marked JUDGEMENT inline in `country_inputs.py` |
 | `gbeta` | Judgement | No source. Note the ordering is only coherent against a *global* cycle — see `examples/run_equity_growth_mode.py` and validation item V-D2 |
 | `ibeta` | Judgement | No source |
@@ -447,6 +449,13 @@ The six correlations between the factor and the macro innovations are **Judgemen
 The derivation is validated at one point: CNY's measured dollar correlation of 0.923
 reproduces the 0.92 the article publishes independently. That validates the *method*, not
 each of the 36 loadings.
+
+**Status of the FX loadings, updated 2026-08-22.** The source data is now complete: with
+`data/fx_bloomberg_legs.csv` added, every one of the twelve currencies the table covers is
+present in the repository — plus CHF, CAD, AUD and NZD, which are not in the table. **But no
+regression script has been committed**, so these 36 loadings remain Derived-but-not-
+re-runnable, and are the only such entries left. Committing that script would close the last
+reproducibility gap in this document.
 
 ## 6. Participant configuration
 
