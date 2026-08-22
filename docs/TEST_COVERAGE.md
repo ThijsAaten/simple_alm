@@ -1,6 +1,8 @@
 # Test suite coverage
 
-`tests/test_invariants.py` — **46 tests, all passing** at the V-M3 commit, 2026-08-22 (43 at `0adf3bb`).
+`tests/test_invariants.py` — **48 tests, all passing** on the `vm7-ramp` branch, 2026-08-22
+(43 at `0adf3bb`). *The header previously read 46 while the suite actually held 47; the
+V-M3 round added its three guards without updating the count. Corrected here.*
 Run with `pytest tests/` or `python -m tests.test_invariants`.
 
 This document exists to answer one question: **will the next change be caught by the suite,
@@ -221,3 +223,31 @@ and that break was introduced by this same body of work two rounds earlier. The 
 good at catching the specific defects that have already been found and at asserting the
 seams that were audited. It is not yet a suite that would catch a *new* defect of the kind
 that has been found repeatedly here.
+
+---
+
+## Closing: does anything still open affect a published number?
+
+**No. As of the V-M7 fix, every finding that moved a published number is resolved and
+guarded.** Taking the open register item by item:
+
+| Open item | Nature | Reaches a published number? |
+|---|---|---|
+| **V-M2** — construction seeds collide | Hygiene. Masked in the participant path because `_reseed_specs` overwrites every generator; live only for a caller that builds sleeves without `_run_batch`. No exhibit does. | **No** |
+| **V-M4** — `credit_spread` floor binds 7.1% of steps | Hygiene, and narrowed from 10.1% by V-M3. Truncates the left tail of one state variable, lifting its mean a few bp. Perturbs the IG credit sleeve, 15% of the RSP, by less than seed noise. | **No, within noise** |
+| **V-D7** — fixed modified duration and D² convexity | Tails. The sleeves do not reprice their own duration as yields move, so very large single-year moves are approximated. Affects the extremes of the distribution, not the medians or the deltas. | **No — tails only** |
+| **V-D1** — `global_growth` calibrated as GDP, loadings derived against equity | Design. Currently bounded by loadings of 0 to 0.15. | **No, at current magnitudes** |
+| **V-D2/D3/D4/D6** — `EURO_CYCLE_SHARE` unvalidated; reconstructed test fixture; stale post-2017 table; no sub-annual `dt` | Design and tooling. None is on the path that produces an exhibit. | **No** |
+
+**One correction to the standing understanding.** V-D5 is usually summarised alongside the
+other design items as not reaching an exhibit. That is not quite right: **CHF, CAD and AUD
+are un-derived, and AUD still proxies NZD in the sovereign bond overlay.** Australia and New
+Zealand are 5% each of the overlay, the overlay is 20% of the LHP, and the LHP averages
+~15% of assets over accumulation — so AUD's loadings sit on roughly 1.5% of the portfolio,
+inside published step (iv). AUD also carries `growth_loading = +0.20`, which is the wrong
+sign under the euro-growth convention every derived currency now obeys.
+
+The magnitude is small and it enters through mean-zero deviation terms, so it is very
+probably inside seed noise — but that is an expectation, not a measurement, and it is the
+one open item that is *on* the path to a published figure rather than beside it. It would
+take one comparison run to settle. Everything else above is genuinely off the path.

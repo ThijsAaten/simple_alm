@@ -9,8 +9,9 @@ Nested attribution, each step adding one decision:
 
 Each step is run under two explicit worlds on the SAME paths (Option C):
     BASELINE     — no repression
-    REPRESSION   — EUR real rate pinned to -1.5%, inflation 3.5% over a sustained
-                   late-accumulation window; the low-beta overlay sleeves stay
+    REPRESSION   — EUR real rate pinned to -1.5%, inflation 3.5% for 12 years in
+                   late accumulation, with 3-year linear transitions in and out
+                   (V-M7); the low-beta overlay sleeves stay
                    unrepressed by construction (and a weaker EUR hands the
                    unhedged overlay an FX tailwind via the FX model).
 
@@ -59,15 +60,42 @@ def cfg(equity, lhp_specs):
     return dataclasses.replace(c, rsp_specs=rsp_specs_with_mosaic(equity), lhp_specs=lhp_specs)
 
 
-def repress(path, start=25, duration=12, real=-0.015, infl=0.035, slope=0.010):
-    """Repressed copy of a macro path: over [start, start+duration) pin EUR
-    real_rate and inflation and rebuild the nominal curve so the long real yield
-    is negative (nominal long = real + breakeven ~ inflation)."""
+def repress(path, start=25, duration=12, real=-0.015, infl=0.035, slope=0.010, ramp=3):
+    """Repressed copy of a macro path: 12 years pinned, with 3-year transitions.
+
+    Over [start, start+duration) EUR real_rate and inflation are PINNED and the
+    nominal curve is rebuilt so the long real yield is negative (nominal long =
+    real + breakeven ~ inflation). Over the `ramp` years immediately before and
+    after that window, both are blended LINEARLY between the path's own value and
+    the pinned value — weights 1/4, 2/4, 3/4 going in and 3/4, 2/4, 1/4 coming out
+    for the default ramp of 3.
+
+    WHY THE RAMP (validation finding V-M7). Pinning the state instantaneously put
+    a step change of roughly 250bp into the long rate at each boundary, which a
+    20-year-duration LHP repriced in a single year: a mean +64.3% at the open and
+    -29.8% at the close, compounding to a +15.4% windfall that inflated repression
+    -leg pot LEVELS by about 8%. Marginal contributions were unaffected, because
+    every allocation received the same windfall — but the levels are published, so
+    the artefact was visible in Exhibit 6. A linear transition removes the step
+    without changing what the scenario asserts about the pinned interior.
+
+    Set ramp=0 to recover the pre-2026-08-22 instantaneous behaviour.
+    """
     out = []
+    end = start + duration
     for i, s in enumerate(path):
-        if start <= i < start + duration:
-            long_rate = real + infl
-            s = dataclasses.replace(s, real_rate=real, inflation=infl,
+        w = None                                   # weight on the PINNED value
+        if start <= i < end:
+            w = 1.0                                # interior: fully pinned
+        elif ramp > 0 and start - ramp <= i < start:
+            w = (i - (start - ramp) + 1) / (ramp + 1)          # 1/4, 2/4, 3/4
+        elif ramp > 0 and end <= i < end + ramp:
+            w = (ramp - (i - end)) / (ramp + 1)                # 3/4, 2/4, 1/4
+        if w is not None:
+            r = (1.0 - w) * s.real_rate + w * real
+            f = (1.0 - w) * s.inflation + w * infl
+            long_rate = r + f
+            s = dataclasses.replace(s, real_rate=r, inflation=f,
                                     long_rate=long_rate, short_rate=long_rate - slope)
         out.append(s)
     return out
@@ -96,7 +124,8 @@ def main(n_scenarios=None):
     ]
 
     print(f"NESTED ATTRIBUTION — real pension pot p50 (entry-year EUR) | {n} paths")
-    print("Repression: EUR real -1.5%, inflation 3.5%, 12y late-accumulation window\n")
+    print("Repression: EUR real -1.5%, inflation 3.5% | 12y pinned, "
+          "3y linear transitions in and out\n")
     hdr = f"{'Step':<20}{'BASELINE':>12}{'Δ':>8}{'REPRESSION':>13}{'Δ':>8}"
     print(hdr); print("-" * len(hdr))
     pb = pr = None

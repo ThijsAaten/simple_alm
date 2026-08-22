@@ -17,7 +17,8 @@ Worlds (same construction as `examples.run_attribution`, on the SAME paths)
 --------------------------------------------------------------------------
     BASELINE     — no repression
     REPRESSION   — EUR real rate pinned to -1.5%, inflation 3.5%, over a 12y
-                   late-accumulation window. CGB's global_rate_beta of 0.10 is
+                   late-accumulation window, with 3-year linear transitions in
+                   and out (V-M7). CGB's global_rate_beta of 0.10 is
                    the whole rationale for the line: the episode should not pass
                    through into the CGB curve, and a weaker EUR hands the
                    unhedged CNY exposure an FX tailwind.
@@ -221,7 +222,8 @@ def main(n_scenarios=None, flat_lr=False):
           f"{'   [DOWNSIDE SENSITIVITY: flat long-run]' if flat_lr else ''}")
     print(f"Weight taken from the EUR core; dev {DEV_WEIGHT:.0%} / EM {EM_WEIGHT:.0%} "
           f"overlay held fixed. Equity: PROPOSED A.")
-    print("Repression: EUR real -1.5%, inflation 3.5%, 12y late-accumulation window.")
+    print("Repression: EUR real -1.5%, inflation 3.5% | 12y pinned, "
+          "3y linear transitions in and out.")
     print("Pot = real pension pot at retirement, entry-year EUR (€000).\n")
 
     rows = []

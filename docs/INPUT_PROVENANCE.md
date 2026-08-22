@@ -229,8 +229,11 @@ return advantage. Measured figures: `output/cgb_dial_findings.md`; downside sens
 
 ### Repression scenario (Napier thesis)
 The financial-repression overlay (`examples/run_attribution.py`) pins the EUR real
-rate to **−1.5%** and inflation to **3.5%** over a sustained ~12-year window, with
-foreign curves left unrepressed via their low `global_rate_beta`. Calibration is an
+rate to **−1.5%** and inflation to **3.5%** for a **12-year** window, with **3-year
+linear transitions in and out** (V-M7), and foreign curves left unrepressed via their
+low `global_rate_beta`. The transitions blend both variables between the path's own
+value and the pinned value at weights 1/4, 2/4, 3/4 going in and 3/4, 2/4, 1/4 coming
+out; the pinned interior is unchanged. Calibration is an
 explicit, falsifiable assumption — the result is reported as a conditional world
 alongside the no-repression baseline, never blended into a single probability.
 

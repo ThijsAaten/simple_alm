@@ -966,6 +966,73 @@ def test_portfolio_gives_its_lhp_an_fx_model():
     assert pf.rsp._fx_model is fx
 
 
+def test_repression_ramp_removes_the_boundary_step():
+    """V-M7 guard. The repressed world must not put a step change into the curve.
+
+    Before 2026-08-22 `repress()` pinned real_rate and inflation instantaneously,
+    dropping ~250bp into the long rate at each boundary. A 20-year-duration LHP
+    repriced that in one year: mean +64.3% at the open and -29.8% at the close,
+    compounding to a +15.4% windfall that inflated repression-leg pot LEVELS ~8%.
+    A 3-year linear ramp removes the step.
+
+    WHAT IS ASSERTED, AND WHY NOT A FLAT PER-PATH BOUND. A per-path cap of +-35%
+    on single-year LHP returns is NOT achievable and would not test the ramp: the
+    BASELINE world, with no repression at all, already reaches 56.9% in these same
+    years and a 99th percentile of 33.5%, because a 20-year bond on this VAR is
+    genuinely that volatile (see V-M3, and V-D7 for what remains). A flat cap would
+    be measuring bond volatility, not the transition. So this asserts:
+
+      (1) the pinned interior reproduces the stated real rate and inflation EXACTLY;
+      (2) the MEAN single-year LHP return stays within +-35% at every transition
+          year — the ramp's actual job. Old behaviour: 64.3%, so this bites;
+      (3) the transition-window TAIL is not materially fatter than the baseline
+          tail over the same years. Ratio of 99th percentiles: 1.40 with the ramp,
+          3.30 without.
+    """
+    from examples.run_attribution import repress
+    from assets.bonds import NominalBondSleeve
+    from assets.linkers import LinkerSleeve
+
+    START, DURATION, RAMP = 25, 12, 3
+    REAL, INFL, SLOPE = -0.015, 0.035, 0.010
+    base = mp.build_scenario_engine(mp.build_initial_state(), seed=42).simulate(
+        n_steps=mp.N_STEPS, n_scenarios=120)
+    rep = [repress(p) for p in base]
+
+    # (1) the pinned interior is exact
+    for path in rep[:20]:
+        for y in range(START, START + DURATION):
+            s = path[y]
+            assert abs(s.real_rate - REAL) < 1e-12, f"year {y}: real {s.real_rate} != {REAL}"
+            assert abs(s.inflation - INFL) < 1e-12, f"year {y}: inflation {s.inflation} != {INFL}"
+            assert abs(s.long_rate - (REAL + INFL)) < 1e-12
+            assert abs(s.short_rate - (REAL + INFL - SLOPE)) < 1e-12
+
+    def lhp(path, y):
+        """LHP blend: 50% LongGovt (D=20) + 40% ILG (D=18) + 10% cash."""
+        lg = NominalBondSleeve("L", duration=20.0, maturity=25.0).period_return(path[y], path[y + 1])
+        il = LinkerSleeve("I", real_duration=18.0, maturity=22.0).period_return(path[y], path[y + 1])
+        return 0.5 * lg + 0.4 * il + 0.1 * path[y].short_rate
+
+    # every annual return touched by a transition
+    window = list(range(START - RAMP - 1, START)) + \
+             list(range(START + DURATION - 1, START + DURATION + RAMP))
+
+    # (2) the MEAN transition-year return is bounded
+    for y in window:
+        m = float(np.mean([lhp(p, y) for p in rep]))
+        assert abs(m) < 0.35, (
+            f"mean LHP return in transition year {y} is {m:+.1%} — a boundary step "
+            f"has been reintroduced (pre-ramp behaviour was +64.3% at the open)")
+
+    # (3) the transition tail is not materially fatter than baseline's
+    rep_tail = np.percentile([abs(lhp(p, y)) for p in rep for y in window], 99)
+    base_tail = np.percentile([abs(lhp(p, y)) for p in base for y in window], 99)
+    assert rep_tail < 1.75 * base_tail, (
+        f"transition-window 99th percentile {rep_tail:.1%} is more than 1.75x the "
+        f"baseline {base_tail:.1%} over the same years — the ramp is not smoothing")
+
+
 def test_within_process_reproducibility():
     paths = mp.build_scenario_engine(mp.build_initial_state()).simulate(
         n_steps=mp.N_STEPS, n_scenarios=40)

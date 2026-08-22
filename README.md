@@ -2050,7 +2050,7 @@ Four waypoints, each adding one decision on top of the previous:
 Each step is run under **two explicit worlds on the same macro paths** (common random numbers, Option C):
 
 - **BASELINE** — no repression; the EUR real rate evolves freely under the VAR.
-- **REPRESSION** — EUR real rate pinned to −1.5%, inflation to 3.5% over a 12-year late-accumulation window.  Foreign curves stay unrepressed via their low `global_rate_beta`; a weaker EUR hands the unhedged overlay an FX tailwind via the FX model.
+- **REPRESSION** — EUR real rate pinned to −1.5%, inflation to 3.5% for a 12-year late-accumulation window, with **3-year linear transitions in and out** (V-M7).  Foreign curves stay unrepressed via their low `global_rate_beta`; a weaker EUR hands the unhedged overlay an FX tailwind via the FX model.
 
 ```bash
 python -m examples.run_attribution            # 400 scenarios (default)
@@ -2064,7 +2064,7 @@ Output: a marginal-contribution table showing the baseline and repression real-p
 The `repress()` helper in `run_attribution.py` is an explicit, falsifiable assumption — the result is reported as a **conditional world**, never blended into a single probability:
 
 ```text
-EUR real rate   → −1.5%  (pinned, ~12 years)
+EUR real rate   → −1.5%  (pinned 12 years, 3-year linear ramp in and out)
 EUR inflation   → +3.5%
 EUR long rate   → real + inflation = +2.0%
 Foreign curves  → unchanged (low global_rate_beta)

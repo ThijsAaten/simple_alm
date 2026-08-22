@@ -33,7 +33,7 @@ silently.
 | V-M4 | Major | `credit_spread` floor binds on 10.1% of steps; simulated process ≠ calibrated process | Partly — 7.1% after V-M3 narrowed the spread innovation | Marginal |
 | V-M5 | Major | Reported seed-to-seed standard deviations were themselves understated | **Yes** (via V-C1) | Yes — all stated uncertainties |
 | V-M6 | Major | Provenance doc omits the VAR, the FX non-loading block, and the equity betas | No — documentation | No |
-| V-M7 | Major | `repress()` produces ±50–63% single-year LHP returns at the window boundaries | No — **re-measured after V-M3: now material, not a symptom** (+64% / −30% mean vs 11% baseline sd) | Yes, if corrected |
+| V-M7 | Major | `repress()` produced a step change at the window boundaries: mean +64.3% / −29.8% single-year LHP returns | **RESOLVED 2026-08-22** — 3-year linear ramp | **Yes — repression levels −8%, bond-side step +26%** |
 | V-P1 | Major | `Portfolio` built its LHP with no FX model; LHP currency returns silently dropped to zero | **RESOLVED 2026-08-22** | No (no exhibit uses that path) |
 | V-R1 | Major | `scenarios/regimes.py` carried 7-variable calibrations against the 8-variable state | **RESOLVED 2026-08-22** | No (unreferenced) |
 | **V-F1** | **Major** | The `b_usd` column behind 24 of the 36 FX loadings cannot be reproduced from the committed data | **RESOLVED 2026-08-22** — 17 loadings re-derived | No — all changes within seed noise |
@@ -271,20 +271,48 @@ equity `gbeta` / `ibeta` / `idio` inputs (30 numbers, and `idio` drives the whol
 dispersion); and the participant config (contribution 20%, ambition 70%, floor −3%,
 solidarity 5%, λ=5.0). GBP and New Zealand are never named in the document.
 
-**V-M7 — `repress()` produces ±50–63% single-year LHP returns at the window boundaries.**
-Pinning the state at year 25 drops `long_rate` from ~4.5% to 2.0% instantaneously. The
-original judgement was that this was a symptom of V-M3, because the baseline path showed
-the same extremes. **Re-measured after V-M3 (2026-08-22), that excuse is gone.** Baseline
-LHP single-year sd is now 11.2% with 4.6% of years beyond ±25%; the repression boundary
-produces a mean **+64.2%** (p5 +20%, p95 +118%) at the open and **−30.2%** at the close.
-The step itself is unchanged by the recalibration — `repress()` imposes a fixed −243bp
-average shock whatever Σ says — so it is now a genuine outlier rather than noise, and it
-is *in* the repression leg of every published participant number. A ramped transition
-(e.g. linear over 3 years into and out of the window) is now worth building; recommended,
-not implemented here, because it changes the repression definition (decision D-level) and
-the scenario's stated "12-year window" would need restating.
+**V-M7 — `repress()` put a step change into the curve. RESOLVED 2026-08-22.**
+
+Pinning `real_rate` and `inflation` instantaneously dropped ~250bp into the long rate at each
+window boundary, which the 20-year-duration LHP repriced in a single year.
+
+| Year | Phase | Before | After (3-year ramp) |
+|---|---|---:|---:|
+| 24 | window opens | **+64.3%** | +13.2% |
+| 36 | window closes | **−29.8%** | −7.7% |
+| — | compounded pair | **+15.4%** | −0.4% |
+
+Mean over 400 paths. The compounded pair was a windfall that inflated repression-leg pot
+levels by ~8%.
+
+**Fix.** `repress()` gained `ramp: int = 3`. Over the ramp years either side of the window,
+`real_rate` and `inflation` blend linearly between the path's own value and the pinned value
+— 1/4, 2/4, 3/4 going in and 3/4, 2/4, 1/4 coming out — with `long_rate` and `short_rate`
+rebuilt from the blend. The pinned interior is unchanged. `ramp=0` recovers the old
+behaviour. `repress()` is the single constructor of the repressed world; all five consumers
+import it and inherit the change.
+
+**What moved.** Baseline is **byte-identical** — asserted across 20 attribution levels and 15
+CGB medians, not eyeballed. Repression levels fall 7.9–8.8%.
+
+**The deltas were NOT unaffected**, contrary to the expectation that a common windfall
+cancels. It never was common: it accrued to long-duration EUR core, which is the benchmark
+the sovereign overlay is measured against. Net of the level rescaling, the **bond-side step
+rises 26%** (4.61% → 5.79% of the Current level, t = 4.64) and the CGB dial's repression
+figure rises from +1.86k to +4.96k. The re-anchor step's −9.5k is almost entirely the
+mechanical effect of an 8.4% smaller base. **The overlay case is stronger than published,
+not weaker.**
+
+**Guarded by** `test_repression_ramp_removes_the_boundary_step`, which asserts the pinned
+interior exactly, bounds the mean transition-year LHP return at ±35%, and requires the
+transition-window 99th percentile to stay within 1.75× the baseline's over the same years.
+A flat per-path ±35% cap was rejected as untestable: the baseline world already reaches
+56.9% in those years, so such a cap would measure bond volatility, not the transition.
+
+Full detail: `output/vm7_ramp_summary.md`.
 
 ---
+
 
 ## V-F1 — the FX `b_usd` column is not reproducible — **RESOLVED 2026-08-22**
 

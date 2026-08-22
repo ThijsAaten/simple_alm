@@ -179,10 +179,10 @@ and since 2026-08-22 it reproduces **all three** columns exactly — the loading
 `assets/fx.py` were re-derived from it (V-F1 resolved). A test asserts the script and the
 model cannot drift apart.
 
-**Current exhibit record: `output/fx_attribution.csv`, `output/fx_cgb_dial.csv`,
-`output/fx_pot_distributions.csv`**, produced by `python tools/rerun_multiseed.py 1000 fx`.
-They supersede `output/vm3_*.csv`, which remain committed as the previous record. See
-`output/fx_loadings_rerun_summary.md`. Everything in the "Model output" rows above **is** fully
+**Current exhibit record: `output/vm7_attribution.csv`, `output/vm7_cgb_dial.csv`,
+`output/vm7_pot_distributions.csv`**, produced by `python tools/rerun_multiseed.py 1000 vm7`.
+They supersede `output/fx_*.csv`, which remain committed as the previous record. See
+`output/vm7_ramp_summary.md`. Everything in the "Model output" rows above **is** fully
 reproducible from this repository.
 
 ## Regenerating Exhibit 6
@@ -192,7 +192,7 @@ python -m examples.run_attribution 1000
 ```
 
 Prints both panels: the four waypoints as levels and as marginal contributions, under the
-no-repression baseline and the EUR financial-repression world.
+no-repression baseline and the EUR financial-repression world (12 years pinned, 3-year transitions).
 
 For the multi-seed standard deviations that should accompany any published figure — levels
 move with the random draw sequence and are not interpretable on a single seed — the per-seed
