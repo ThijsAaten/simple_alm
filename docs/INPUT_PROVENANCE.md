@@ -10,6 +10,54 @@ the reference companion to the code in `allocations/country_inputs.py`.
 > into `drift`, mirroring how §3.1 keeps the "+FX" column distinct from the
 > frontier input.
 
+---
+
+## Status summary — what the model rests on
+
+Closes validation finding **V-M6**, which recorded that provenance was complete for
+article-sourced inputs and absent for everything else. Every calibrated numerical input the
+participant model consumes is now classified as one of:
+
+- **Article** — traceable to a stated section of the paper.
+- **Derived** — produced by a regression or calculation, with the script named.
+- **Judgement** — nobody measured it. This is a legitimate and common status; recording it
+  honestly is the entire point. A provenance document that launders assumptions into
+  citations is worse than none.
+
+| Block | Article | Derived | Judgement | Total |
+|---|---:|---:|---:|---:|
+| VAR calibration (X̄, floors, Φ, Σ vols, Σ correlations) | 0 | 0 | 71 | 71 |
+| Global equity market factor (volatility + 6 correlations) | 0 | 1 | 6 | 7 |
+| FX macro loadings (3 columns × 15 currencies) | 0 | 36 | 9 | 45 |
+| FX other parameters (carry, drift, PPP, idio × 15) | 0 | 1 | 74 | 75 |
+| Country equity: drift, CAPE now, CAPE fair (3 × 10) | 24 | 0 | 6 | 30 |
+| Country equity: gbeta, ibeta, mbeta, idio (4 × 10) | 0 | 14 | 26 | 40 |
+| Sovereign bond overlay (6 × 6) | 7 | 0 | 29 | 36 |
+| Participant configuration + cohort glide path | 0 | 0 | 29 | 29 |
+| Sub-portfolio structure (LHP/RSP weights, durations, betas) | 0 | 0 | 23 | 23 |
+| **Total** | **31** | **52** | **273** | **356** |
+| **Share** | **9%** | **15%** | **77%** | |
+
+**Read that table before reading any exhibit.** Roughly three quarters of the model's
+calibrated inputs are judgement calls, and the single largest unsourced block — the VAR, at
+71 numbers — is also the one validation finding **V-M3** shows to be mis-specified: it
+produces long-bond return volatility of 22.7% against a plausible 10–15%.
+
+What *is* evidence-backed is concentrated where the paper's argument lives: the country
+equity return and valuation inputs (Article), and the FX and equity factor loadings
+(Derived). The macro engine underneath them is assumption.
+
+### Two places where I decline to write "Derived"
+
+The brief for this document proposed recording the **`global_growth` block** and the
+**CGB long-run yield of 2.3%** as Derived. Neither was produced by a regression or a
+calculation from data. Both were specified as target calibrations with economic reasoning,
+which I then sanity-checked for stationarity, PSD and internal consistency. Checking a
+number is not deriving it. They are recorded as **Judgement**, with the reasoning attached,
+because the alternative is exactly the laundering this document exists to prevent.
+
+---
+
 ## Per-country equity inputs (`COUNTRY_INPUTS`)
 
 | Market | drift = §3.1 r_nom | CAPE now | CAPE anchor | FX key | Article source |
@@ -21,13 +69,25 @@ the reference companion to the code in `allocations/country_inputs.py`.
 | India | 6.4% | 28.0 | 24.0 | INR | §3.1 Table 1a; negative multiple-reversion (the "India tension") |
 | Korea | 7.1% | 12.0 | 16.0 | KRW | §3.1 Table 1a; §5.1 Value-Up re-rating |
 | Taiwan | 5.6% | 21.0 | 19.0 | TWD | §3.1 Table 1a |
-| Indonesia | 8.8% | 17.0 | 18.0 | THB* | §3.1 Table 1a |
-| Vietnam† | 9.0% | 13.0 | 16.0 | THB* | PROXY — not in §3.1; illustrative dial |
+| Indonesia | 8.8% | 17.0 | 18.0 | IDR | §3.1 Table 1a |
+| Vietnam† | 9.0% | 13.0 | 16.0 | VND | PROXY — not in §3.1; illustrative dial |
 | Singapore† | 6.0% | 14.0 | 15.0 | SGD | PROXY — not in §3.1; illustrative dial |
 
-`*` `FXModel` has no IDR or VND. **THB** is used as the nearest managed-float ASEAN
-proxy for Indonesia and Vietnam. Flagged in `country_inputs.py`; revisit if the
-FX contribution for those markets becomes load-bearing.
+**FX proxies retired 2026-08.** `FXModel` now carries IDR and VND as first-class
+currencies, calibrated from their own EUR-cross histories, so Indonesia and
+Vietnam no longer stand in behind THB. Do not read the result as vindication of
+the old proxy: THB and IDR both land at a 0.30 `inflation_loading`, but THB
+correlates 0.713 with the USD against IDR's 0.510 — they converge only because
+IDR's volatility (11.1% annualised) is materially higher than THB's (8.2%) and
+the beta calculation offsets one against the other. Post-2017 the two diverge
+sharply (THB 0.13, IDR 0.33). The substitution was never sound; it happened to be
+roughly harmless at these particular parameters.
+
+VND's 0.951 correlation with the USD is arithmetically correct and economically
+misleading: the dong tracks the dollar because the State Bank of Vietnam manages
+it to, not because a market chose that relationship. The parameter describes a
+policy regime and would be badly wrong if the regime changed. At ~1% Vietnam
+weight the exposure is small, but the caveat should stay visible.
 
 `†` **Proxy markets.** Vietnam and Singapore have no §3.1 row; their inputs are
 illustrative dials for "playing with weights", not sourced estimates. `real=False`
@@ -62,6 +122,55 @@ construction* (see `scripts/build_cape_mapping_v2.py` in the article bundle):
 - **FX tailwind**: §8.7 (renminbi ~10% PPP-undervalued, partial close) and §13.4
   (the won the strongest of the undervalued free-floaters; CNY/TWD anchored,
   modest). Pre-calibrated per currency in `assets/fx.py` (`_DEFAULT_CURRENCIES`).
+- **FX macro loadings** (2026-08, joint estimation): all three columns come from
+  ONE regression per currency — the EUR-cross log return on
+  `[USD EUR-cross return, MSCI World EUR return]`, 2001-2026 monthly. Then
+  `inflation_loading = 0.50 x b_usd`, `growth_loading = -0.30 x b_usd`, and
+  `global_growth_loading = 0.60 x residual growth beta`, each rounded to 0.05.
+  CNY's measured dollar correlation of 0.923 reproduces the 0.92 the article
+  publishes independently, which validates the method.
+
+  Three conventions, all enforced by tests:
+    * `inflation_loading` POSITIVE for every currency — the repression world is
+      euro-specific, so every non-euro currency appreciates against the EUR.
+    * `growth_loading` NEGATIVE for every currency — EURO-AREA growth above trend
+      strengthens the EUR. `state.growth` is euro growth.
+    * `global_growth_loading` SIGNED — the only cyclical channel. Positive for
+      exporters (KRW/IDR 0.15), negative for safe havens (JPY -0.05), zero where
+      dollar-tracking explains everything (HKD/VND/CNY).
+
+  The table previously carried POSITIVE growth loadings (CNY +0.30, TWD +0.40,
+  KRW +0.30) justified by comments about "risk-on" and "global growth" — a factor
+  the model did not then have. Those values were wrong against the euro-growth
+  convention while the economics the comments described was real: residual growth
+  betas of +0.105 for TWD (t=5.8) and +0.262 for KRW (t=8.4) against +0.001 for
+  HKD (t=0.4). The fix added `global_growth` to the macro state so that exposure
+  has somewhere to live, rather than flipping signs and losing it.
+
+  WEAKEST LINK: the 0.60 conversion turns an equity-return beta into a
+  growth-deviation loading by borrowing `EquitySleeve`'s own `growth_beta`. The
+  ranking across currencies is robust; the level scales with that assumption.
+
+  This SUPERSEDES the univariate loadings of the previous round, which absorbed
+  shared growth exposure into the dollar coefficient (KRW 0.15 -> 0.40,
+  IDR 0.30 -> 0.50, TWD 0.35 -> 0.45, JPY 0.35 -> 0.20).
+
+  UN-DERIVED: CHF, CAD and AUD are absent from the FX dataset. CHF's -0.30
+  inflation loading is the last negative; CAD's +0.10 and AUD's +0.20 growth
+  loadings are global-cycle exposure in the euro-growth column. Left alone rather
+  than corrected by assertion. Full derivation and flags: the note in
+  `assets/fx.py`. Sensitivities:
+  `python -m examples.run_fx_loading_sensitivity` (sample period) and
+  `python -m examples.run_equity_growth_mode` (equity growth cycle).
+
+- **`global_growth`** (2026-08): world real GDP growth, macro state index [7].
+  Long-run mean 3.0% (vs euro 2.5%, since the world includes EM), persistence
+  0.55 (vs 0.50 — a world aggregate is more persistent than one region),
+  volatility 2.0% (vs 2.5% — diversification), innovation correlation 0.75 with
+  euro growth and -0.30 with credit spread. Global growth feeds euro growth at
+  0.20; the reverse spillover is ZERO, because a single region does not move the
+  world aggregate. Side effect: euro growth's unconditional volatility rises
+  10.9% and credit spread's 7.1%; the other five variables are unchanged.
 
 ## Still to be primary-sourced for the journal version
 
@@ -86,21 +195,37 @@ statements and 10-year benchmark yields, mid-June 2026.
 |---|:--|---:|---:|:--|:--|
 | Australia | dev | 4.8% | 0.20 | AUD | AAA, commodity exporter |
 | New Zealand | dev | 4.5% | 0.20 | AUD* | AA+, commodity exporter |
-| Indonesia | em | 6.6% | 0.10 | THB* | ~4% real yield |
+| Indonesia | em | 6.6% | 0.10 | IDR | ~4% real yield |
 | India | em | 6.9% | 0.10 | INR | ~4% real yield |
 | Korea | em | 3.7% | 0.15 | KRW | ~1.5% real yield |
-| China (CGB) | managed | 1.8% | 0.10 | CNY | capped dial, default 0% |
+| China (CGB) | managed | 1.8% -> 2.3%* | 0.10 | CNY | capped dial, default 0% |
 
-`*` `FXModel` lacks NZD and IDR; **AUD** proxies NZD and **THB** proxies IDR
+`*` `FXModel` lacks NZD; **AUD** still proxies NZD (that substitution REMAINS live
+and is not covered by the FX derivation — it needs its own beta). IDR is no longer proxied
 (documented in `bond_inputs.py`). All overlay sleeves are held **unhedged** —
 FX-hedging back to EUR would, by covered-interest parity, reintroduce the
 (possibly repressed) EUR base rate.
 
+`*` China is the only row whose long-run (reversion-target) yield differs from its
+initial yield: 1.8% initial, 2.3% long-run. Every other row sets the two equal, which
+assumes today's yield IS the equilibrium — a defensible neutral prior for the five
+unrepressed sovereigns, but not for CGB, where 1.8% is a cyclical low.
+
 CGB sits in its own `managed` block, explicitly **not** claimed as unrepressed
-(the curve is managed and capital-controlled). It is included as a capped dial on
-the rationale that over the past decade Bunds and USTs delivered roughly flat-to-
-negative real returns while CGB broadly kept pace with inflation, and China is
-visibly working to make the 10-year CGB a credible real store of value.
+(the curve is managed and capital-controlled). It is included as a capped dial for its
+**low EUR pass-through** (β = 0.10; article §13 measures Fed-PBoC policy-cycle
+correlation at ~0.03), which is what keeps a EUR-repression episode out of the sleeve.
+
+On the store-of-value claim, the model **supports the weak form and not the strong
+form**. Measured over accumulation, CGB earns a small positive real return in EUR terms
+(~+0.9% baseline, ~+0.8% under repression), so "broadly keeps pace with inflation" holds
+— though note this comes mostly from the unhedged CNY leg, not the 1.8% local carry.
+What the model does **not** support is CGB out-earning what it displaces: the EUR core
+returns ~2.2% real at baseline and ~1.3% under repression, leaving CGB ~127bp behind at
+baseline and ~55bp behind under repression. That narrowing under repression, together
+with the sleeve's volatility contribution, is the case for the line — not an absolute
+return advantage. Measured figures: `output/cgb_dial_findings.md`; downside sensitivity
+(flat 1.8% long-run) via `python -m examples.run_cgb_dial --flat-lr`.
 
 ### Repression scenario (Napier thesis)
 The financial-repression overlay (`examples/run_attribution.py`) pins the EUR real
@@ -108,3 +233,262 @@ rate to **−1.5%** and inflation to **3.5%** over a sustained ~12-year window, 
 foreign curves left unrepressed via their low `global_rate_beta`. Calibration is an
 explicit, falsifiable assumption — the result is reported as a conditional world
 alongside the no-repression baseline, never blended into a single probability.
+
+
+---
+
+# Complete input register (added 2026-08-22, closing V-M6)
+
+Every block below was previously undocumented. Values are generated from the live code, not
+transcribed.
+
+## 1. VAR macro engine — **Judgement throughout, no source**
+
+The 71 numbers below are the largest unsourced block in the model. They were not estimated
+from data, not taken from the paper, and not cited to a reference calibration. They are a
+hand-built VAR that produces broadly sensible macro dynamics — simulated long-run means
+match X̄ to within 8bp on seven of eight variables, nothing drifts or explodes over 65 years
+— but the volatilities are demonstrably too high for the bond sleeves that consume them
+(**V-M3**: 22.7% simulated long-bond volatility against a plausible 10–15%).
+
+**If one block of this model should be replaced with estimated parameters before journal
+submission, it is this one.**
+
+### VAR long-run mean (X-bar) and floors
+
+| Variable | X-bar | Floor | Status |
+|---|---:|---:|---|
+| `short_rate` | 0.0350 | -0.020 | Judgement |
+| `long_rate` | 0.0450 | 0.000 | Judgement |
+| `real_rate` | 0.0150 | -0.050 | Judgement |
+| `inflation` | 0.0250 | -0.050 | Judgement |
+| `growth` | 0.0250 | -0.200 | Judgement |
+| `credit_spread` | 0.0100 | 0.000 | Judgement |
+| `curvature` | 0.0050 | -0.050 | Judgement |
+| `global_growth` | 0.0300 | -0.150 | Judgement |
+
+### VAR persistence matrix Φ (non-zero entries only)
+
+| Row (responds) | Column (driver) | Value | Status |
+|---|---|---:|---|
+| `short_rate` | `short_rate` | 0.70 | Judgement |
+| `short_rate` | `long_rate` | 0.10 | Judgement |
+| `short_rate` | `inflation` | 0.05 | Judgement |
+| `long_rate` | `short_rate` | 0.05 | Judgement |
+| `long_rate` | `long_rate` | 0.80 | Judgement |
+| `long_rate` | `inflation` | 0.05 | Judgement |
+| `real_rate` | `real_rate` | 0.75 | Judgement |
+| `real_rate` | `inflation` | 0.05 | Judgement |
+| `inflation` | `short_rate` | 0.05 | Judgement |
+| `inflation` | `long_rate` | 0.05 | Judgement |
+| `inflation` | `inflation` | 0.60 | Judgement |
+| `growth` | `inflation` | 0.05 | Judgement |
+| `growth` | `growth` | 0.50 | Judgement |
+| `growth` | `global_growth` | 0.20 | Judgement |
+| `credit_spread` | `growth` | 0.10 | Judgement |
+| `credit_spread` | `credit_spread` | 0.65 | Judgement |
+| `curvature` | `long_rate` | 0.05 | Judgement |
+| `curvature` | `inflation` | 0.03 | Judgement |
+| `curvature` | `curvature` | 0.65 | Judgement |
+| `global_growth` | `global_growth` | 0.55 | Judgement |
+
+### VAR innovation volatilities (diagonal of Σ)
+
+| Variable | Annualised σ | Status |
+|---|---:|---|
+| `short_rate` | 0.0080 | Judgement |
+| `long_rate` | 0.0120 | Judgement |
+| `real_rate` | 0.0100 | Judgement |
+| `inflation` | 0.0080 | Judgement |
+| `growth` | 0.0250 | Judgement |
+| `credit_spread` | 0.0060 | Judgement |
+| `curvature` | 0.0080 | Judgement |
+| `global_growth` | 0.0200 | Judgement |
+
+### VAR innovation correlations (upper triangle, non-zero)
+
+| Pair | ρ | Status |
+|---|---:|---|
+| `short_rate` × `long_rate` | +0.70 | Judgement |
+| `short_rate` × `real_rate` | +0.50 | Judgement |
+| `short_rate` × `inflation` | +0.20 | Judgement |
+| `short_rate` × `growth` | -0.10 | Judgement |
+| `short_rate` × `credit_spread` | +0.20 | Judgement |
+| `short_rate` × `curvature` | -0.15 | Judgement |
+| `short_rate` × `global_growth` | -0.08 | Judgement |
+| `long_rate` × `real_rate` | +0.60 | Judgement |
+| `long_rate` × `inflation` | +0.40 | Judgement |
+| `long_rate` × `growth` | -0.15 | Judgement |
+| `long_rate` × `credit_spread` | +0.30 | Judgement |
+| `long_rate` × `curvature` | -0.20 | Judgement |
+| `long_rate` × `global_growth` | -0.10 | Judgement |
+| `real_rate` × `inflation` | -0.20 | Judgement |
+| `real_rate` × `growth` | -0.10 | Judgement |
+| `real_rate` × `credit_spread` | +0.20 | Judgement |
+| `real_rate` × `curvature` | -0.10 | Judgement |
+| `real_rate` × `global_growth` | -0.08 | Judgement |
+| `inflation` × `growth` | +0.10 | Judgement |
+| `inflation` × `curvature` | +0.10 | Judgement |
+| `inflation` × `global_growth` | +0.08 | Judgement |
+| `growth` × `credit_spread` | -0.40 | Judgement |
+| `growth` × `curvature` | +0.05 | Judgement |
+| `growth` × `global_growth` | +0.75 | Judgement |
+| `credit_spread` × `curvature` | -0.10 | Judgement |
+| `credit_spread` × `global_growth` | -0.30 | Judgement |
+| `curvature` × `global_growth` | +0.05 | Judgement |
+
+`global_growth` (index [7], added 2026-08) is part of the above and is **Judgement**: mean
+3.0% against euro 2.5% because the world includes EM; persistence 0.55 against 0.50 because a
+world aggregate is more persistent than one region; volatility 2.0% against 2.5% because of
+diversification; spillover 0.20 into euro growth and **zero** back, because one region does
+not move the world aggregate. Reasoned, sanity-checked, not measured.
+
+## 2. Global equity market factor
+
+### Global equity factor
+
+| Input | Value | Source | Status |
+|---|---:|---|---|
+| Factor volatility | 0.155 | `calibration/equity_factor_calibration.py`, MSCI World monthly 2001–2025 | **Derived** |
+| ρ(F, `short_rate`) | -0.05 | — | Judgement |
+| ρ(F, `long_rate`) | -0.10 | — | Judgement |
+| ρ(F, `real_rate`) | -0.05 | — | Judgement |
+| ρ(F, `inflation`) | -0.10 | — | Judgement |
+| ρ(F, `growth`) | +0.25 | — | Judgement |
+| ρ(F, `credit_spread`) | -0.35 | — | Judgement |
+| ρ(F, `global_growth`) | +0.30 | — | Judgement |
+
+The factor volatility is **Derived** — `calibration/equity_factor_calibration.py` computes it
+directly from MSCI World monthly returns 2001–2025. **The script cannot be re-run from a
+clean clone**: it reads `ret_usd.pkl` and `fx_levels.pkl` from an absolute path outside the
+repository. See `calibration/README.md`. What was verified without that data is that the
+resulting table is internally consistent — `market_beta² × var(F) + idio_vol²` reproduces
+every stated total volatility to 0.001 and every R² to 2dp.
+
+The six correlations between the factor and the macro innovations are **Judgement**.
+
+## 3. Country equity inputs — full table
+
+### Country equity inputs
+
+| Market | drift | CAPE now | CAPE fair | gbeta | ibeta | mbeta | idio | FX |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| USA | 0.040 | 40.1 | 27.5 | 0.60 | -0.30 | 0.961 | 0.034 | USD |
+| Europe | 0.070 | 17.0 | 17.0 | 0.60 | -0.30 | 0.852 | 0.073 | None |
+| Japan | 0.060 | 24.0 | 22.0 | 0.55 | -0.25 | 0.739 | 0.124 | JPY |
+| China | 0.084 | 11.0 | 14.0 | 0.70 | -0.20 | 0.913 | 0.204 | CNY |
+| India | 0.064 | 28.0 | 24.0 | 0.75 | -0.25 | 0.867 | 0.170 | INR |
+| Korea | 0.071 | 12.0 | 16.0 | 0.70 | -0.25 | 0.925 | 0.156 | KRW |
+| Taiwan | 0.056 | 21.0 | 19.0 | 0.70 | -0.25 | 0.870 | 0.156 | TWD |
+| Indonesia | 0.088 | 17.0 | 18.0 | 0.70 | -0.20 | 0.850 | 0.190 | IDR |
+| Vietnam | 0.090 | 13.0 | 16.0 | 0.75 | -0.20 | 0.750 | 0.240 | VND |
+| Singapore | 0.060 | 14.0 | 15.0 | 0.55 | -0.25 | 0.900 | 0.115 | SGD |
+
+| Column | Status | Source |
+|---|---|---|
+| `drift`, `cape_now`, `cape_fair` | **Article** (8 markets) | §3.1 Table 1a — see the table earlier in this file |
+| `drift`, `cape_now`, `cape_fair` | Judgement (Vietnam, Singapore) | Not in §3.1; illustrative dials, flagged `real=False` |
+| `mbeta`, `idio` | **Derived** (7 markets) | `calibration/equity_factor_calibration.py`, regression on MSCI World in local currency |
+| `mbeta`, `idio` | Judgement (Indonesia, Vietnam, Singapore) | Assigned by analogy; marked JUDGEMENT inline in `country_inputs.py` |
+| `gbeta` | Judgement | No source. Note the ordering is only coherent against a *global* cycle — see `examples/run_equity_growth_mode.py` and validation item V-D2 |
+| `ibeta` | Judgement | No source |
+
+## 4. Sovereign bond overlay — full table
+
+### Sovereign bond overlay
+
+| Sovereign | Block | within | y0 | long-run | duration | β global | idio | FX |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| Australia | dev | 0.50 | 0.048 | 0.048 | 8.0 | 0.20 | 0.006 | AUD |
+| NewZealand | dev | 0.50 | 0.045 | 0.045 | 8.0 | 0.20 | 0.007 | AUD |
+| Indonesia | em | 0.35 | 0.066 | 0.066 | 7.0 | 0.10 | 0.009 | IDR |
+| India | em | 0.35 | 0.069 | 0.069 | 7.0 | 0.10 | 0.009 | INR |
+| Korea | em | 0.30 | 0.037 | 0.037 | 8.0 | 0.15 | 0.007 | KRW |
+| China | managed | 1.00 | 0.018 | 0.023 | 7.0 | 0.10 | 0.005 | CNY |
+
+| Column | Status | Source |
+|---|---|---|
+| `yld` (initial yield) | **Article** | Current 10y nominal yields, mid-2026; see the bond-side section above |
+| `beta` for China | **Article** | §13 Fed–PBoC policy-cycle correlation ≈ 0.03; 0.10 is a conservative margin above it |
+| `beta` for the other five | Judgement | No source |
+| `lr` (long-run yield, China only) | Judgement | 2.3% chosen so the sleeve is not assumed to sit at a cyclical low permanently. Reasoned, not derived |
+| `within`, `dur`, `idio` | Judgement | No source |
+| `fx` | Structural | **AUD still proxies NZD** — that substitution remains live (V-D5) |
+
+## 5. FX currency parameters — full table
+
+### FX currency parameters
+
+| Ccy | infl_load | growth_load | global_load | carry | drift | ppp_rev | ppp_gap0 | idio_vol |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| USD | +0.50 | -0.30 | +0.00 | +0.015 | -0.010 | 0.10 | +0.00 | 0.100 |
+| GBP | +0.30 | -0.20 | +0.05 | +0.005 | -0.005 | 0.10 | -0.05 | 0.090 |
+| CAD | +0.20 | +0.10 | +0.00 | +0.005 | +0.000 | 0.10 | +0.00 | 0.080 |
+| AUD | +0.10 | +0.20 | +0.00 | +0.010 | +0.000 | 0.10 | +0.00 | 0.110 |
+| CHF | -0.30 | -0.50 | +0.00 | -0.005 | +0.005 | 0.10 | +0.00 | 0.080 |
+| JPY | +0.20 | -0.15 | -0.05 | -0.008 | +0.003 | 0.08 | -0.25 | 0.090 |
+| CNY | +0.45 | -0.30 | +0.00 | +0.005 | +0.005 | 0.12 | -0.20 | 0.050 |
+| HKD | +0.50 | -0.30 | +0.00 | +0.015 | +0.000 | 0.15 | +0.00 | 0.030 |
+| TWD | +0.45 | -0.25 | +0.05 | +0.005 | +0.005 | 0.12 | -0.20 | 0.070 |
+| KRW | +0.40 | -0.25 | +0.15 | +0.015 | +0.003 | 0.12 | -0.15 | 0.100 |
+| SGD | +0.35 | -0.20 | +0.05 | +0.005 | +0.005 | 0.10 | -0.10 | 0.060 |
+| THB | +0.40 | -0.25 | +0.05 | +0.010 | +0.000 | 0.12 | -0.15 | 0.120 |
+| IDR | +0.50 | -0.30 | +0.15 | +0.035 | -0.020 | 0.12 | -0.15 | 0.111 |
+| VND | +0.50 | -0.30 | +0.00 | +0.030 | -0.020 | 0.10 | -0.20 | 0.040 |
+| INR | +0.45 | -0.30 | +0.10 | +0.030 | -0.015 | 0.15 | -0.10 | 0.070 |
+
+| Column | Status | Source |
+|---|---|---|
+| `inflation_loading`, `growth_loading`, `global_growth_loading` | **Derived** (12 currencies) | One joint regression per currency: EUR-cross monthly log return on `[USD EUR-cross, MSCI World EUR]`, 2001–2026. `0.50 × b_usd`, `−0.30 × b_usd`, `0.60 × residual growth beta`, each rounded to 0.05. Full table and validation in `assets/fx.py` |
+| The same three | Judgement (CHF, CAD, AUD) | **Un-derived** — absent from the FX dataset. CHF's −0.30 inflation loading is the last remaining negative and contradicts its own comment (V-D5) |
+| `idio_vol` for IDR | **Derived** | 11.1% annualised, measured on the same sample |
+| `carry_spread`, `fx_drift`, `ppp_reversion`, `initial_ppp_gap`, `idio_vol` (all others) | Judgement | **No source for any of the 74.** These drive the FX tailwind central to the unhedged-overlay thesis |
+
+The derivation is validated at one point: CNY's measured dollar correlation of 0.923
+reproduces the 0.92 the article publishes independently. That validates the *method*, not
+each of the 36 loadings.
+
+## 6. Participant configuration
+
+### Participant configuration
+
+| Input | Value | Status |
+|---|---:|---|
+| `entry_age` | 25 | Judgement / convention |
+| `retirement_age` | 68 | Judgement / convention |
+| `death_age` | 90 | Judgement / convention |
+| `contribution_rate` | 0.2 | Judgement / convention |
+| `AMBITION_RR` | 0.7 | Judgement / convention |
+| `adjustment_floor` | -0.03 | Judgement / convention |
+| `adjustment_smoothing_years` | 3 | Judgement / convention |
+| `solidarity_reserve_rate` | 0.05 | Judgement / convention |
+| `lambda_ (Nelson-Siegel)` | 5.0 | Judgement / convention |
+| `base_salary` | 50000 | Judgement / convention |
+| `salary real_growth` | 0.005 | Judgement / convention |
+| `N_SCENARIOS default` | 500 | Judgement / convention |
+| `SEED` | 42 | Judgement / convention |
+
+### Cohort glide path
+
+| Age band | RSP | LHP | Status |
+|---|---:|---:|---|
+| 25–34 | 1.20 | 0.00 | Judgement / Dutch WTP convention |
+| 35–44 | 1.00 | 0.00 | Judgement / Dutch WTP convention |
+| 45–54 | 0.80 | 0.20 | Judgement / Dutch WTP convention |
+| 55–64 | 0.70 | 0.30 | Judgement / Dutch WTP convention |
+| 65–74 | 0.50 | 0.50 | Judgement / Dutch WTP convention |
+| 75–84 | 0.20 | 0.80 | Judgement / Dutch WTP convention |
+| 85–94 | 0.20 | 0.80 | Judgement / Dutch WTP convention |
+| 95–104 | 0.20 | 0.80 | Judgement / Dutch WTP convention |
+
+None of these is sourced. Several are Dutch WTP conventions rather than free choices — the
+70% career-average ambition and the −3% adjustment floor in particular — but the paper is
+not cited for them here and they should not be read as measured.
+
+## 7. Sub-portfolio structure
+
+`build_lhp_specs` (LongGovt 50% at duration 20, ILG 40% at real duration 18, cash 10%) and
+`build_rsp_specs` (equity 50%, real assets 25%, IG credit 15%, commodities 10%, with their
+growth/inflation betas and FX exposures) are **Judgement** — a plausible Dutch fund shape,
+not a calibration. The `GlobalEquity` sleeve in `build_rsp_specs` is replaced by the country
+mosaic in every published exhibit, so its own betas do not reach the article's numbers.

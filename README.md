@@ -1,6 +1,58 @@
 # simple_alm — Asset-Liability Management Simulation Framework
 
-A modular Python framework for quantitative ALM modelling. It generates correlated macro scenarios, values a liability cash-flow stream, simulates a portfolio split between a Liability-Hedging Portfolio (LHP) and a Return-Seeking Portfolio (RSP), and tracks the funding ratio over time.
+A modular Python framework for quantitative ALM modelling. It generates correlated macro scenarios, values a liability cash-flow stream, simulates a portfolio split between a Liability-Hedging Portfolio (LHP) and a Return-Seeking Portfolio (RSP), and tracks the funding ratio over time. Its main use is the **participant lifecycle model** (`main_participant.py`), which runs a single Dutch-WTP-style member from entry to death and produces the exhibits in the accompanying paper.
+
+## Factor structure
+
+Returns are driven by an **eight-variable VAR(1) macro state** plus a **global equity market factor** drawn alongside it:
+
+```
+X = [short_rate, long_rate, real_rate, inflation, growth, credit_spread, curvature, global_growth]
+F = global equity market factor (15.5% p.a., mean zero)
+```
+
+- `growth` is **euro-area** growth; `global_growth` (index `[7]`) is the world aggregate. Euro growth is a price-taker on the world cycle — spillover 0.20 in, zero out.
+- `F` is a **return**, not a state level, so it is deliberately *not* in the VAR state vector. It is drawn from the same innovation vector — giving exact contemporaneous correlation with the macro shocks, +0.25 with growth and −0.35 with the credit spread — then attached to `MacroState.equity_factor`. It carries no persistence.
+
+Each equity market therefore decomposes as:
+
+```
+r = drift + market_beta·F + growth_beta·(g − ḡ) + global_growth_beta·(G − Ḡ) + inflation_beta·(π − π̄) + idio
+```
+
+and each currency as a loading on inflation, euro growth and global growth, applied by `FXModel` as an overlay on top of local-currency sleeve returns.
+
+## What it is for
+
+- Comparing **allocations** for a single participant on common random numbers — which is what every published exhibit does.
+- Conditional-world analysis: the same paths run under a no-repression baseline and a EUR financial-repression world.
+- Attribution: decomposing an allocation change into marginal contributions.
+
+## What it is not for
+
+- **Pricing, or anything requiring calibrated absolute risk.** Roughly 77% of the model's inputs are judgement calls (see `docs/INPUT_PROVENANCE.md`), and long-bond volatility is known to be too high (V-M3 below).
+- **Absolute forecasts of pot size.** The levels move with the random draw sequence; only differences between allocations on shared paths are meaningful.
+- Multi-participant or fund-level solvency work. `simulation/engine.py` and `liabilities/model.py` exist but drive no published exhibit and carry no tests.
+- Sub-annual time steps. Carry terms scale with `dt` but yield-change terms do not; every published run uses `dt = 1.0`.
+
+## Known limitations
+
+An independent validation in August 2026 found three Critical and nine Major defects. All Critical ones are fixed and guarded by tests. What remains open, from `docs/VALIDATION_REPORT.md`:
+
+| ID | Issue | Affects a published number? |
+|---|---|---|
+| **V-M3** | Long-bond return volatility is 22.7% simulated against a plausible 10–15%; the whole VAR Σ block is unsourced | **Yes** — inflates the pot distribution's tails. Exhibit 6 panel (b) should not be published until this is resolved |
+| V-M2 | Construction-seed collisions (Europe = RealAssets = 44) — masked in the participant path by the V-C1 fix, still live for callers that build sleeves directly | No |
+| V-M4 | The `credit_spread` floor binds on ~10% of steps, lifting its simulated mean 11bp above target | Marginally |
+| V-M6 | Provenance — **closed 2026-08-22** by the complete register in `docs/INPUT_PROVENANCE.md` | No |
+| V-M7 | `repress()` produces ±50–63% single-year LHP returns at the window boundaries — a symptom of V-M3 | Yes, indirectly |
+| V-D1 | `global_growth` is calibrated as a GDP variable while the currency loadings on it were derived against equity returns | Small; loadings are 0–0.15 |
+| V-D5 | CHF, CAD and AUD FX loadings are un-derived. CHF's −0.30 inflation loading is the last remaining negative and contradicts its own comment. AUD still proxies NZD in the bond overlay | Not in the attribution or CGB runs |
+| — | A single global equity factor under-fits North Asia: Korea–Taiwan 0.44 against ~0.70 observed. A second regional factor is the natural remedy | Small |
+
+`scenarios/regimes.py` raises `NotImplementedError` — it predates the eight-variable state and was marked unsupported rather than given four sets of unsourced parameters.
+
+**Start here:** `docs/VALIDATION_REPORT.md` (what was wrong), `docs/INPUT_PROVENANCE.md` (what each input rests on), `CHANGELOG.md` (what changed when), `docs/TEST_COVERAGE.md` (what the 43 tests do and do not guard).
 
 ---
 
@@ -359,7 +411,7 @@ simple_alm/
 │   ├── bonds.py         # NominalBondSleeve, CreditBondSleeve
 │   ├── linkers.py       # LinkerSleeve
 │   ├── growth.py        # EquitySleeve, RealAssetSleeve, CommoditySleeve
-│   ├── fx.py            # FXModel, CurrencyParams (13-currency overlay)
+│   ├── fx.py            # FXModel, CurrencyParams (15-currency overlay)
 │   └── em_bonds.py      # ChinaGovernmentBondSleeve, GovernmentBondSleeve (generic sovereign O-U bond)
 ├── portfolio/
 │   └── portfolio.py     # SleeveSpec, SubPortfolio, Portfolio
@@ -378,7 +430,10 @@ simple_alm/
 │   └── preview.py       # static allocation-preview table (no Monte Carlo)
 ├── examples/
 │   ├── run_equity_only.py  # CURRENT vs PROPOSED A equity-only validation
-│   └── run_attribution.py  # nested attribution: equity + bond side × baseline / repression
+│   ├── run_attribution.py  # nested attribution: equity + bond side × baseline / repression
+│   ├── run_cgb_dial.py     # CGB dial sweep: what the 0% default costs, per world
+│   ├── run_fx_loading_sensitivity.py  # full-sample vs post-2017 FX inflation loadings
+│   └── run_equity_growth_mode.py      # euro vs split vs global equity growth cycle
 ├── tests/
 │   └── test_invariants.py  # 12 load-bearing invariants (pytest or python -m)
 ├── docs/
@@ -875,7 +930,8 @@ Reading the real yield from the full NS real curve (rather than just `state.real
 EquitySleeve(
     name="Equity",
     drift=0.07,                      # long-run nominal total return p.a.
-    growth_beta=0.60,                # sensitivity to growth deviation from trend
+    growth_beta=0.60,                # sensitivity to EURO-AREA growth deviation
+    global_growth_beta=0.0,          # sensitivity to WORLD growth deviation (default off)
     inflation_beta=-0.30,            # negative: unexpected inflation hurts equities
     idio_vol=0.15,                   # annualised idiosyncratic volatility
     long_run_growth=0.025,           # trend growth for deviation calculation
@@ -1031,8 +1087,9 @@ r = carry + fx_drift + macro_betas + ppp_correction + idio
 
 carry          = carry_spread × dt
 fx_drift       = fx_drift × dt
-macro_betas    = inflation_loading × (π − π̄) × dt
-               + growth_loading    × (g − ḡ) × dt
+macro_betas    = inflation_loading      × (π − π̄) × dt
+               + growth_loading         × (g − ḡ) × dt     # EURO growth
+               + global_growth_loading  × (G − Ḡ) × dt     # GLOBAL growth
 ppp_correction = −ppp_reversion × ppp_gap × dt
 idio           = idio_vol × √dt × ε
 
@@ -1043,23 +1100,49 @@ ppp_gap_{t+1}  = (1 − ppp_reversion × dt) × ppp_gap_t  +  idio_t
 
 **Pre-calibrated currencies** (`FXModel.default()`):
 
-| Code | carry | drift | ppp_gap₀ | idio_vol | Notes |
-| --- | --- | --- | --- | --- | --- |
-| USD | +1.5 % | −1.0 % | 0 % | 10 % | Dollar-debasement bias |
-| GBP | +0.5 % | −0.5 % | −5 % | 9 % | Slight post-Brexit undervaluation |
-| CAD | +0.5 % | 0 % | 0 % | 8 % | Commodity-linked |
-| AUD | +1.0 % | 0 % | 0 % | 11 % | Growth-positive, resource exporter |
-| CHF | −0.5 % | +0.5 % | 0 % | 8 % | Safe haven; risk-off rally |
-| JPY | −0.8 % | +0.3 % | −25 % | 9 % | BOJ-managed; deeply undervalued vs PPP |
-| CNY | +0.5 % | +0.5 % | −20 % | 5 % | PBOC-managed; structural appreciation |
-| HKD | +1.5 % | 0 % | 0 % | 3 % | USD peg → near-zero idio vol |
-| TWD | +0.5 % | +0.5 % | −20 % | 7 % | CA surplus; semiconductor cycle |
-| KRW | +1.5 % | +0.3 % | −15 % | 10 % | Export economy; open capital account |
-| SGD | +0.5 % | +0.5 % | −10 % | 6 % | MAS managed appreciation |
-| THB | +1.0 % | 0 % | −15 % | 12 % | Tourism + manufacturing |
-| INR | +3.0 % | −1.5 % | −10 % | 7 % | High carry; RBI-managed vol |
+| Code | b_usd | infl_load | growth_load | global_load | carry | drift | ppp_gap₀ | idio_vol |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| USD | 1.000 | **0.50** | **−0.30** | **0.00** | +1.5 % | −1.0 % | 0 % | 10 % |
+| HKD | 0.988 | **0.50** | **−0.30** | **0.00** | +1.5 % | 0 % | 0 % | 3 % |
+| VND | 1.027 | **0.50** | **−0.30** | **0.00** | +3.0 % | −2.0 % | −20 % | 4 % |
+| IDR | 0.997 | **0.50** | **−0.30** | **0.15** | +3.5 % | −2.0 % | −15 % | 11.1 % |
+| INR | 0.938 | **0.45** | **−0.30** | **0.10** | +3.0 % | −1.5 % | −10 % | 7 % |
+| CNY | 0.933 | **0.45** | **−0.30** | **0.00** | +0.5 % | +0.5 % | −20 % | 5 % |
+| TWD | 0.863 | **0.45** | **−0.25** | **0.05** | +0.5 % | +0.5 % | −20 % | 7 % |
+| THB | 0.814 | **0.40** | **−0.25** | **0.05** | +1.0 % | 0 % | −15 % | 12 % |
+| KRW | 0.760 | **0.40** | **−0.25** | **0.15** | +1.5 % | +0.3 % | −15 % | 10 % |
+| SGD | 0.720 | **0.35** | **−0.20** | **0.05** | +0.5 % | +0.5 % | −10 % | 6 % |
+| GBP | 0.596 | **0.30** | **−0.20** | **0.05** | +0.5 % | −0.5 % | −5 % | 9 % |
+| JPY | 0.447 | **0.20** | **−0.15** | **−0.05** | −0.8 % | +0.3 % | −25 % | 9 % |
+| CAD | — | 0.20 | *+0.10* | 0.00 | +0.5 % | 0 % | 0 % | 8 % |
+| AUD | — | 0.10 | *+0.20* | 0.00 | +1.0 % | 0 % | 0 % | 11 % |
+| CHF | — | *−0.30* | −0.50 | 0.00 | −0.5 % | +0.5 % | 0 % | 8 % |
 
-**Asian undervaluation thesis:** JPY, CNY, TWD, KRW, SGD, THB, and INR all carry a negative `initial_ppp_gap`, encoding the view that they are structurally cheap relative to EUR on PPP terms.  Diversification into Asian assets therefore benefits from both local asset returns and slow (5–12 year) real currency appreciation.
+All three **bold** columns come from **one joint regression per currency** (2001–2026, monthly): each currency's EUR-cross log return on `[USD EUR-cross return, MSCI World EUR return]`.  Then
+
+```
+inflation_loading      =  0.50 × b_usd            rounded to 0.05
+growth_loading (EUR)   = −0.30 × b_usd            rounded to 0.05
+global_growth_loading  =  0.60 × b_g (residual)   rounded to 0.05
+```
+
+**Three conventions, all now explicit:**
+
+1. `inflation_loading` — EUR inflation above target weakens the EUR, so the foreign currency gains.  **Positive for every currency.**
+2. `growth_loading` — **euro-area** growth above trend strengthens the EUR, so the foreign currency loses.  **Negative for every currency.**
+3. `global_growth_loading` — world growth above trend lifts risk appetite.  **Signed**: positive for cyclical exporters (KRW, IDR at 0.15), negative for safe havens (JPY at −0.05), zero where dollar-tracking already explains everything (HKD, VND, CNY).
+
+**Why the third column had to exist.**  The table previously carried *positive* growth loadings — CNY +0.30, TWD +0.40, KRW +0.30 — justified by comments about "risk-on" and "global growth positive".  Every one of those described a factor the model did not have, so the values were wrong against convention (2) while the economics the comments described was real and measurable: residual growth betas of +0.105 for TWD (t = 5.8) and +0.262 for KRW (t = 8.4), against +0.001 for HKD (t = 0.4), which is what a currency board should show.  The fix was to give that economics somewhere to live, not to flip signs and lose it.
+
+> **The 0.60 conversion is the weakest link.**  `b_g` is an *equity-return* beta; the model needs a *growth-deviation* loading.  0.60 is `EquitySleeve`'s own `growth_beta`, borrowed as the conversion factor.  If the true equity-to-growth sensitivity is 0.4 or 0.9, every `global_growth_loading` scales with it.  The **ranking** across currencies is robust (it comes straight from `b_g`); the **level** is not.  Treat the column as ordinally reliable and cardinally soft.
+>
+> **Joint estimation is what makes the columns consistent.**  The previous round derived `inflation_loading` from a *univariate* regression on the USD, which absorbed shared growth exposure into the dollar coefficient.  Controlling for growth moves several materially: KRW 0.15 → 0.40, IDR 0.30 → 0.50, TWD 0.35 → 0.45, JPY 0.35 → 0.20.  That the two columns could contradict each other at all is a direct consequence of their having been set independently.  `test_model_implied_correlations_match_the_measured_betas` now asserts they cannot.
+>
+> **Open flag — CHF, CAD, AUD are un-derived.**  All three are absent from the FX dataset, so no regression exists.  CHF's `inflation_loading` of −0.30 is the last remaining negative and contradicts its own comment; its `growth_loading` of −0.50 is, by contrast, *correct*.  CAD's +0.10 and AUD's +0.20 growth loadings are global-cycle exposure sitting in the euro-growth column — the same defect, uncorrected.  They are left alone because fixing them without a measured beta substitutes one assertion for another.  CHF is the priority (2 % of the GlobalEquity sleeve, so it reaches the headline participant charts but not the attribution or CGB runs); AUD carries the NZD proxy into the bond overlay.
+
+**Asian undervaluation thesis:** JPY, CNY, TWD, KRW, SGD, THB, IDR, VND, and INR all carry a negative `initial_ppp_gap`, encoding the view that they are structurally cheap relative to EUR on PPP terms.  Diversification into Asian assets therefore benefits from both local asset returns and slow (5–12 year) real currency appreciation.
+
+**Sample-period sensitivity.**  Post-2017 these correlations fall sharply (CNY 0.92 → 0.71, TWD 0.80 → 0.60, JPY 0.56 → 0.25; HKD holds at 0.99 as a hard peg should), mirroring the equity decoupling in §13.  The full sample is the headline because 112 months is thin for currency betas.  The choice is not self-serving: post-2017 puts CNY at 0.30 rather than 0.45, which *weakens* the CGB repression case.  Run it with `python -m examples.run_fx_loading_sensitivity`.
 
 **Usage:**
 
@@ -1097,14 +1180,28 @@ from assets.em_bonds import ChinaGovernmentBondSleeve
 ChinaGovernmentBondSleeve(
     name="CGB",
     duration=7.0,            # modified duration; 10Y CGB ≈ 7–8 yr
-    initial_yield=0.023,     # starting yield; ~2.3 % for 10Y CGB in 2024–25
-    long_run_yield=0.025,    # O-U equilibrium; consistent with PBOC 2–3 % inflation target
-    yield_reversion=0.25,    # κ = 0.25 → ~4-yr half-life (faster than EUR at κ ≈ 0.10)
-    global_rate_beta=0.25,   # pass-through from EUR long rate (partial; capital controls)
+    initial_yield=0.018,     # mid-2026 10Y CGB (fell through 2% in late 2024)
+    long_run_yield=0.023,    # O-U target, deliberately ABOVE spot — see note below
+    yield_reversion=0.20,    # κ = 0.20 → ~3.5-yr half-life; matches build_overlay_specs
+    global_rate_beta=0.10,   # weak pass-through; §13 Fed–PBoC policy correlation ≈ 0.03
     idio_yield_vol=0.005,    # ~50 bp/yr idio vol (vs ~100 bp for EUR govts)
     seed=None,
 )
 ```
+
+> **Calibration authority.**  `allocations/bond_inputs.py` is the single source of truth
+> for the numbers that drive published results; it passes every parameter explicitly, so
+> the defaults above are illustrative and are kept equal to its China row.  Before
+> 2026-08 this docstring quoted 2.3 % initial / 2.5 % long-run and β ≈ 0.20–0.30 — stale
+> 2023-era figures that contradicted `bond_inputs.py`.  Corrected above.
+>
+> **Why ȳ > y₀.**  Setting `long_run_yield == initial_yield` (as every other overlay
+> sovereign does) removes the reversion pull and silently asserts that today's cyclical
+> low is permanent.  For CGB that also made the sleeve's store-of-value rationale
+> arithmetically impossible: 1.8 % nominal cannot outrun any positive inflation.  A
+> modest 2.3 % target makes the claim testable rather than excluded by construction.
+> `python -m examples.run_cgb_dial --flat-lr` re-prices the sweep with the flat 1.8 %
+> assumption as a downside sensitivity.
 
 **Yield dynamics (O-U with global pass-through):**
 
@@ -1118,12 +1215,25 @@ r  = y_t × dt  −  D × Δy  +  ½ × C × Δy²
 
 | Parameter | CGB (PBOC-managed) | EUR Govt (ECB) | Rationale |
 | --------- | ------------------ | -------------- | --------- |
-| κ (reversion) | 0.25 (4-yr ½-life) | ~0.10 (7-yr ½-life) | PBOC active curve management |
+| κ (reversion) | 0.20 (3.5-yr ½-life) | ~0.10 (7-yr ½-life) | Uniform overlay κ; a PBOC-managed curve would arguably justify faster |
 | σ (idio vol) | 50 bp/yr | ~100 bp/yr | Suppressed volatility regime |
-| β_global | 0.25 | 1.0 (by construction) | Partial integration via capital controls |
-| Long-run yield ȳ | 2.5 % | driven by VAR | High savings, structural low rates |
+| β_global | 0.10 | 1.0 (by construction) | Capital controls; §13 Fed–PBoC policy correlation ≈ 0.03 |
+| Initial yield y₀ | 1.8 % | driven by VAR | Mid-2026 market level |
+| Long-run yield ȳ | 2.3 % | driven by VAR | Above spot, so the low is not assumed permanent |
 
-**Asian undervaluation thesis:**  CGBs provide real-yield exposure to an economy where nominal yields (~2.3%) approximate real yields given near-zero inflation — a structurally different profile from EUR or USD bonds.  Combined with a CNY appreciation overlay (via FXModel), they offer diversification against European financial repression scenarios.
+**What the line is and is not.**  CGB is held for its *low pass-through*: it does not
+import a EUR-repression episode.  The sleeve earns a small **positive** real return in
+EUR terms (~+0.9 % baseline, ~+0.8 % under repression), so it does keep pace with
+inflation — mostly via the unhedged CNY leg rather than the 1.8 % local carry.  What it
+does **not** do is out-earn what it displaces: the EUR core returns ~2.2 % real at
+baseline and ~1.3 % under repression, so CGB gives up ~127 bp at baseline and ~55 bp
+under repression.  That narrowing is the conditional-value case.  Measured figures:
+`output/cgb_dial_findings.md`.
+
+Note also that CNY carries `inflation_loading = 0.45` in the FX model (USD's 0.50 × the
+~0.92 RMB–USD correlation the article measures).  That helps CGB under EUR repression —
+and is precisely why the RMB offers little diversification *away from the dollar*.  Both
+follow from the same correlation; the second should not be claimed alongside the first.
 
 **No default allocation** is set in the current configs; include in `rsp_specs` or `lhp_specs` when ready:
 
@@ -1159,7 +1269,7 @@ GovernmentBondSleeve(
     yield_reversion=0.20,
     global_rate_beta=0.10,   # low: decoupled from EUR
     idio_yield_vol=0.009,
-    fx_key="THB",            # THB proxies IDR (not in FXModel)
+    fx_key="IDR",            # own currency since 2026-08 (was a THB proxy)
     fx_exposure=1.0,         # unhedged
     seed=42,
 )
@@ -1343,11 +1453,18 @@ These raise `ValueError` if the `regime` column is absent. The column is only pr
 
 ### State vector
 
-All asset return models reference the seven-dimensional macro state:
+All asset return models reference the eight-dimensional macro state:
 
 ```
-X = [short_rate, long_rate, real_rate, inflation, growth, credit_spread, curvature]
+X = [short_rate, long_rate, real_rate, inflation, growth, credit_spread, curvature, global_growth]
 ```
+
+`growth` is **euro-area** real GDP growth and always was; `global_growth` (index `[7]`, added 2026-08) is the world aggregate.  The distinction was implicit until currency and equity betas needed a global cycle to attach to.  Two asymmetries are deliberate:
+
+- **The euro area is a price-taker.**  Global growth feeds euro growth (`Φ[growth, global_growth] = 0.20`); the reverse spillover is zero.  A single region does not move the world aggregate.  Reversing or symmetrising that would let euro shocks feed back through the global cycle into every currency and equity beta — the exact confound the variable exists to remove.
+- **The world aggregate is more persistent and less volatile** than any one region (φ 0.55 vs 0.50; σ 2.0 % vs 2.5 %), which is what diversification across regions should produce.  Long-run mean 3.0 % vs the euro area's 2.5 %, since the world includes EM.
+
+Adding it is not free: euro growth's unconditional volatility rises **+10.9 %** (2.89 % → 3.21 %) and credit spread's **+7.1 %**, because both now inherit global-cycle variance through the spillover.  The other five variables are unchanged to four decimals.  Φ stays stationary (max \|eigenvalue\| 0.855) and Σ stays PSD — both asserted in `tests/`.
 
 ### Cash
 
@@ -1783,11 +1900,11 @@ Each country entry provides the inputs to `EquitySleeve` and the FXModel:
 | India | 6.4 % | 28.0 | 24.0 | INR | §3.1 |
 | Korea | 7.1 % | 12.0 | 16.0 | KRW | §3.1; Value-Up re-rating |
 | Taiwan | 5.6 % | 21.0 | 19.0 | TWD | §3.1 |
-| Indonesia | 8.8 % | 17.0 | 18.0 | THB* | §3.1 |
-| Vietnam† | 9.0 % | 13.0 | 16.0 | THB* | Proxy — illustrative |
+| Indonesia | 8.8 % | 17.0 | 18.0 | IDR | §3.1 |
+| Vietnam† | 9.0 % | 13.0 | 16.0 | VND | Proxy — illustrative |
 | Singapore† | 6.0 % | 14.0 | 15.0 | SGD | Proxy — illustrative |
 
-`*` FXModel has no IDR or VND; THB is used as the nearest managed-float ASEAN proxy.
+`*` The THB-proxies-IDR/VND substitution was **retired 2026-08** — both are now first-class FXModel currencies calibrated from their own EUR-cross histories. THB and IDR happen to land at the same 0.30 loading, but via different correlations (0.713 vs 0.510) offset by different volatilities; post-2017 they diverge (THB 0.13, IDR 0.33), so the agreement was coincidence, not vindication.
 `†` Proxy markets (`real=False`); not in §3.1. Use `proxy_markets()` to list them.
 
 `drift` is the **local-currency** nominal expected return. FX appreciation is handled separately by the FXModel overlay (the `fx` key), never folded into `drift`.
@@ -1823,6 +1940,16 @@ python -m examples.run_equity_only
 
 # Nested attribution — equity + bond side × baseline / repression (see §2.15):
 python -m examples.run_attribution
+
+# CGB dial sweep — cost of the 0% default, per world (see §2.15):
+python -m examples.run_cgb_dial
+python -m examples.run_cgb_dial --flat-lr    # 1.8% flat long-run downside
+
+# FX loading sample-period sensitivity — full-sample vs post-2017:
+python -m examples.run_fx_loading_sensitivity
+
+# Equity growth-cycle comparison — euro (current) vs split vs global:
+python -m examples.run_equity_growth_mode
 
 # Static allocation preview (no Monte Carlo):
 python -m allocations.preview
@@ -1877,12 +2004,12 @@ from allocations import BOND_INPUTS, DEVELOPED, EM, MANAGED
 | --- | --- | ---: | ---: | ---: | --- |
 | Australia | dev | 4.8 % | 8y | 0.20 | AUD |
 | New Zealand | dev | 4.5 % | 8y | 0.20 | AUD* |
-| Indonesia | em | 6.6 % | 7y | 0.10 | THB* |
+| Indonesia | em | 6.6 % | 7y | 0.10 | IDR |
 | India | em | 6.9 % | 7y | 0.10 | INR |
 | Korea | em | 3.7 % | 8y | 0.15 | KRW |
 | China (CGB) | managed | 1.8 % | 7y | 0.10 | CNY |
 
-`*` FXModel lacks NZD and IDR; AUD proxies NZD and THB proxies IDR (documented in `bond_inputs.py` and `docs/INPUT_PROVENANCE.md`).
+`*` IDR is now a first-class currency (THB proxy retired 2026-08). **NZD is still missing, so AUD continues to proxy New Zealand** — that substitution remains live and is not covered by the FX derivation; it needs its own beta before it can be retired the same way.
 
 ### `build_overlay_specs()` — building LHP overlay sleeves
 
@@ -1944,3 +2071,73 @@ Foreign curves  → unchanged (low global_rate_beta)
 ```
 
 See `docs/INPUT_PROVENANCE.md` §Repression scenario for the Napier-thesis calibration rationale.
+
+### CGB dial sweep (`examples/run_cgb_dial.py`)
+
+`bond_inputs.py` carries China (CGB) in the MANAGED block as a capped dial with a
+**default weight of zero**, so the nested attribution never reports what the line would
+contribute.  This script prices it: CGB swept across 0 / 1 / 2 / 3 / 5 % of the total LHP,
+taken **from the EUR core** with the developed (10 %) and EM (10 %) overlay blocks held
+fixed, under both worlds on the same paths and the same seeding as `run_attribution.py`.
+Equity is held at PROPOSED A throughout — this is a marginal on top of step (iv).
+
+```bash
+python -m examples.run_cgb_dial              # 1000 scenarios (default)
+python -m examples.run_cgb_dial 200          # faster
+python -m examples.run_cgb_dial --flat-lr    # downside: long-run yield pinned at 1.8%
+```
+
+Reports per world / weight: median real pot at retirement, Δ vs the 0 % default,
+p5/p25/p75/p95, and the LHP's own annualised volatility and real return.  Writes
+`output/cgb_dial_sweep.csv` (`..._flat_lr.csv` under `--flat-lr`); interpretation lives in
+`output/cgb_dial_findings.md`.
+
+`ParticipantResult` exposes no sub-portfolio return series, so the LHP statistics are
+captured from **inside the real run** by instrumenting `SubPortfolio.step`
+(`_LHPRecorder`), validated to reproduce `pot_path` exactly.  Nothing in
+`allocations/bond_inputs.py` is modified — the dial is overridden locally, per call.
+
+Headline: the dial at 0 % is not forgoing median pot — holding CGB costs a few thousand
+euro of median pot at a 5 % weight.  Its payoff is left-tail and volatility: p5 rises
+monotonically in both worlds, and the LHP-vol reduction per bp of real return given up is
+several times more efficient under repression.
+
+### Which growth cycle do equity betas load on? (open question)
+
+`EquitySleeve` applies `growth_beta` to `state.growth`, which is **euro-area** growth.  But `allocations/country_inputs.py` carries India at 0.75, China 0.70 and Korea 0.70 against Europe's 0.60 and Japan's 0.55.  **Indian equities cannot plausibly respond more strongly to euro-area growth than European equities do.**  That ordering is only coherent against a *global* cycle — the equity side appears to carry the same defect the FX side did before `global_growth` existed.
+
+`build_equity_specs(..., growth_mode=)` implements three options without changing the default:
+
+| Mode | Meaning |
+| --- | --- |
+| `"euro"` | **Default, current behaviour.**  Whole beta on euro growth.  No published number changes. |
+| `"split"` | Beta divided between the cycles by `mosaic.EURO_CYCLE_SHARE`, preserving each country's **total** growth sensitivity. |
+| `"global"` | Whole beta on global growth.  Makes the ordering coherent in one line, but leaves European equities with no euro-cycle sensitivity at all. |
+
+```bash
+python -m examples.run_equity_growth_mode      # all three, side by side
+```
+
+`EURO_CYCLE_SHARE` is **illustrative, not calibrated** — a reasoned split for the comparison run.  Nobody regressed it.  See `output/global_growth_factor_summary.md` for the measured effect and the recommendation.
+
+### Shared FX path across LHP and RSP
+
+`LifecycleSimulator.run` builds **one** `FXModel` per run and advances it **once per
+simulated year**, handing the same per-year dict to both sub-portfolios via
+`SubPortfolio.step(..., fx_returns=...)`:
+
+```python
+fx_returns = fx_model.step(state_t, state_t1, dt=1.0)
+rsp_return = rsp_sub.step(state_t, state_t1, dt=1.0, fx_returns=fx_returns)
+lhp_return = lhp_sub.step(state_t, state_t1, dt=1.0, fx_returns=fx_returns)
+```
+
+This matters because `FXModel.step` does two things at once: it draws the period's
+currency shock **and** rolls the PPP gaps forward.  Letting each sub-portfolio advance the
+shared model (the behaviour before 2026-08) therefore had two consequences — the RSP and
+the LHP drew *independent* shocks for the same year, and the PPP gaps decayed **twice per
+year**, halving the effective horizon of the Asian-undervaluation tailwind.  When a
+sub-portfolio is the sole holder of its `FXModel`, omitting `fx_returns` keeps the
+original self-advancing behaviour, which is what `Portfolio` still relies on.
+
+Guarded by `test_rsp_and_lhp_see_the_same_fx_rates_within_a_year` in `tests/`.

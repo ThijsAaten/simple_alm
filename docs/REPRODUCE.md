@@ -35,6 +35,26 @@ To run the bond-side nested attribution under baseline vs EUR financial repressi
 python -m examples.run_attribution        # baseline vs repression, all four attribution steps
 ```
 
+To price the China (CGB) dial that block leaves at 0% by default — swept across
+0/1/2/3/5% of the LHP, both worlds, same seeding:
+
+```bash
+python -m examples.run_cgb_dial           # 1000 scenarios; or: python -m examples.run_cgb_dial 200
+python -m examples.run_cgb_dial --flat-lr # downside: CGB long-run yield pinned at 1.8%
+```
+
+Writes `output/cgb_dial_sweep.csv` (and `..._flat_lr.csv`); the read-out is in
+`output/cgb_dial_findings.md`.
+
+To run the FX inflation-loading sample-period sensitivity (full-sample vs post-2017):
+
+```bash
+python -m examples.run_fx_loading_sensitivity     # 1000 scenarios
+```
+
+The 2026-08 fixes to FX stepping, CGB calibration and the FX loading table — with
+before/after attribution — are written up in `output/simple_alm_fixes_summary.md`.
+
 To inspect just the equity-only Current-vs-A validation:
 
 ```bash
@@ -96,3 +116,56 @@ bash build_article_faj.sh asia_pension_allocation_article_v4_2026-05-15  # FAJ t
 
 Requires pandoc 3.x, xelatex (TeX Live 2023+), python3. See `docs/INPUT_PROVENANCE.md`
 for where each input comes from.
+
+
+---
+
+## Which exhibits are model output and which are market data
+
+Easy to conflate, and the distinction decides what a reader can check.
+
+| Exhibit / figure | Kind | Regenerate with |
+|---|---|---|
+| **Exhibit 6** — nested attribution, both worlds | **Model output** | `python -m examples.run_attribution 1000` |
+| CGB dial sweep | **Model output** | `python -m examples.run_cgb_dial 1000` |
+| Participant fan charts, replacement-ratio distribution | **Model output** | `python main_participant.py` |
+| Allocation preview: `E[r]loc`, `+FX`, `~vol` columns | **Model output** (closed-form, no Monte Carlo) | `python -m allocations.preview` |
+| §3.1 Table 1a inputs: `drift`, CAPE now, CAPE anchor | **Market data** — not produced here | — |
+| Sovereign 10y yields in the bond overlay | **Market data** | — |
+| Equity `mbeta` / `idio` and the 15.5% factor volatility | **Market data → derived** | `calibration/equity_factor_calibration.py` (see caveat below) |
+| FX loadings | **Market data → derived** | Joint regression; source data not in repo |
+| FX history for re-deriving the FX inputs | **Market data** | `data/fx_history_bloomberg.xlsx` — needs a Bloomberg terminal |
+
+**Two derivations cannot be re-run from a clean clone.** `calibration/equity_factor_calibration.py`
+reads two pickles from an absolute path outside the repository, and the FX loading regression
+has no committed script at all. Both are recorded as *Derived* in
+`docs/INPUT_PROVENANCE.md` with that limitation stated. Everything in the "Model output" rows
+above **is** fully reproducible from this repository.
+
+## Regenerating Exhibit 6
+
+```bash
+python -m examples.run_attribution 1000
+```
+
+Prints both panels: the four waypoints as levels and as marginal contributions, under the
+no-repression baseline and the EUR financial-repression world.
+
+For the multi-seed standard deviations that should accompany any published figure — levels
+move with the random draw sequence and are not interpretable on a single seed — the per-seed
+record behind the current numbers is committed at `output/validated_attribution.csv`.
+
+> **Panel (b), the pot distribution, is not yet publication-ready.** It is a pure dispersion
+> claim, and validation finding **V-M3** (long-bond volatility 22.7% against a plausible
+> 10–15%) is still open. Panel (a), the marginal contributions, is sound. See
+> `docs/VALIDATION_REPORT.md`.
+
+## Verifying the install
+
+Every command in this file was re-run on 2026-08-22 against the committed tree. The fastest
+check that a clone is working:
+
+```bash
+python -m pytest tests/ -q          # 43 passed
+python -m examples.run_attribution 20   # a few seconds; numbers will be noisy at N=20
+```
