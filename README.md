@@ -30,29 +30,29 @@ and each currency as a loading on inflation, euro growth and global growth, appl
 
 ## What it is not for
 
-- **Pricing, or anything requiring calibrated absolute risk.** Roughly 77% of the model's inputs are judgement calls (see `docs/INPUT_PROVENANCE.md`), and long-bond volatility is known to be too high (V-M3 below).
+- **Pricing, or anything requiring calibrated absolute risk.** Roughly 77% of the model's inputs are judgement calls (see `docs/INPUT_PROVENANCE.md`); the VAR volatilities are anchored to realised euro yield history (V-M3, resolved 2026-08-22) but remain judgement, not estimation.
 - **Absolute forecasts of pot size.** The levels move with the random draw sequence; only differences between allocations on shared paths are meaningful.
 - Multi-participant or fund-level solvency work. `simulation/engine.py` and `liabilities/model.py` exist but drive no published exhibit and carry no tests.
 - Sub-annual time steps. Carry terms scale with `dt` but yield-change terms do not; every published run uses `dt = 1.0`.
 
 ## Known limitations
 
-An independent validation in August 2026 found three Critical and nine Major defects. All Critical ones are fixed and guarded by tests. What remains open, from `docs/VALIDATION_REPORT.md`:
+**Status (2026-08-23, model state `8f01503`):** an independent validation in August 2026 found three Critical and ten Major defects. **All Critical and Major findings are resolved and guarded by tests** (V-C1–C3, V-M1, V-M3, V-M5–M7, V-P1, V-R1, V-F1; V-M4 reduced to hygiene at 7.1%; V-M2 hygiene, masked in every exhibit path). Exhibit 6 is regenerated from this state and **both panels are publishable**. The test suite is **48 passing**; a clone reproduces every published exhibit and every derivation from committed code and committed data (`pytest tests/ -q`, then `python tools/rerun_multiseed.py`). What remains, from `docs/VALIDATION_REPORT.md`, moves no published number:
 
 | ID | Issue | Affects a published number? |
 |---|---|---|
-| **V-M3** | Long-bond return volatility is 22.7% simulated against a plausible 10–15%; the whole VAR Σ block is unsourced | **Yes** — inflates the pot distribution's tails. Exhibit 6 panel (b) should not be published until this is resolved |
+| V-M3 | **Resolved 2026-08-22.** Σ recalibrated to realised euro long-yield history; LongGovt 14.3% (was 22.7%). Both Exhibit 6 panels publishable | No — corrected |
 | V-M2 | Construction-seed collisions (Europe = RealAssets = 44) — masked in the participant path by the V-C1 fix, still live for callers that build sleeves directly | No |
-| V-M4 | The `credit_spread` floor binds on ~10% of steps, lifting its simulated mean 11bp above target | Marginally |
+| V-M4 | The `credit_spread` floor binds on 7.1% of steps (was 10.1% before V-M3) — hygiene, pinned by a test | No, within noise |
 | V-M6 | Provenance — **closed 2026-08-22** by the complete register in `docs/INPUT_PROVENANCE.md` | No |
-| V-M7 | `repress()` produces ±50–63% single-year LHP returns at the window boundaries — a symptom of V-M3 | Yes, indirectly |
+| V-M7 | **Resolved 2026-08-22.** The repression window now enters over a 3-year linear ramp; the boundary windfall (+64%/−30% mean years) is gone | No — corrected; repression levels fell ~8% and the record (`output/vm7_*.csv`) reflects it |
 | V-D1 | `global_growth` is calibrated as a GDP variable while the currency loadings on it were derived against equity returns | Small; loadings are 0–0.15 |
-| V-D5 | CHF, CAD and AUD FX loadings are un-derived. CHF's −0.30 inflation loading is the last remaining negative and contradicts its own comment. AUD still proxies NZD in the bond overlay | Not in the attribution or CGB runs |
+| V-D5 | CHF, CAD and AUD FX loadings are un-derived; CHF's −0.30 inflation loading is the last remaining negative. AUD still proxies NZD in the bond overlay (~1.5% of assets, inside step (iv)) | Expected within seed noise — unmeasured |
 | — | A single global equity factor under-fits North Asia: Korea–Taiwan 0.44 against ~0.70 observed. A second regional factor is the natural remedy | Small |
 
 `scenarios/regimes.py` raises `NotImplementedError` — it predates the eight-variable state and was marked unsupported rather than given four sets of unsourced parameters.
 
-**Start here:** `docs/VALIDATION_REPORT.md` (what was wrong), `docs/INPUT_PROVENANCE.md` (what each input rests on), `CHANGELOG.md` (what changed when), `docs/TEST_COVERAGE.md` (what the 43 tests do and do not guard).
+**Start here:** `docs/VALIDATION_REPORT.md` (what was wrong, and the dated verdict that it is fixed), `docs/INPUT_PROVENANCE.md` (what each input rests on), `CHANGELOG.md` (what changed when), `docs/TEST_COVERAGE.md` (what the 43 tests do and do not guard).
 
 ---
 

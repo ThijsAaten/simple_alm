@@ -62,6 +62,13 @@ There is no partial remedy. Re-run anything you produced from the June code.
 
 ## What is still open
 
+> **Superseded 2026-08-23.** This table records the state at the June→August push and is kept
+> as history. Since then: V-M3 resolved (Σ recalibrated to realised euro yield history;
+> LongGovt 14.3%; both Exhibit 6 panels publishable), V-M7 resolved (3-year ramped repression
+> transition), V-F1 found and resolved (FX loadings re-derived from committed data), V-M4
+> reduced to 7.1%. Current status: `README.md` and the dated verdict at the top of
+> `docs/VALIDATION_REPORT.md`.
+
 | ID | Issue | Affects a published number? |
 |---|---|---|
 | **V-M3** | Long-bond volatility 22.7% simulated against a plausible 10–15%; the whole VAR Σ block is unsourced | **Yes.** Exhibit 6 panel (a) is sound; **panel (b), the pot distribution, should not be published until this is resolved** — it is a pure dispersion claim |

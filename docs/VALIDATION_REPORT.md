@@ -8,7 +8,21 @@ Performed 2026-08 as an independent validation, not by the model's author. Scope
 
 ## Verdict up front
 
-**The exhibits should not be submitted as they stand.** Two Critical defects were found
+**2026-08-23, model state `8f01503` — the exhibits are publishable.** Every Critical and
+Major finding in the register below is resolved and guarded by a test verified to fail on
+the defective behaviour: V-C1–V-C3, V-M1, V-M3 (Σ recalibrated to realised euro yield
+history; LongGovt 14.3%), V-M5, V-M6, V-M7 (ramped repression transition), V-P1, V-R1 and
+V-F1. V-M4 is reduced to hygiene (floor binds 7.1%, pinned); V-M2 is hygiene, masked on
+every exhibit path. The design items V-D1–V-D7 are recommendations; none moves a published
+number beyond seed noise (V-D5, the one item touching a published path, is expected within
+noise but unmeasured). Exhibit 6 is regenerated from this state — both panels, including the
+pot distribution — and the current exhibit record is `output/vm7_*.csv`. The suite stands at
+48 tests, all passing. The verdict below is the original, kept as the record of what was
+found; it described the state of 2026-08-21 and is **superseded**.
+
+---
+
+**The exhibits should not be submitted as they stand.** *(superseded — see above)* Two Critical defects were found
 that change every published number, and a third — not fixable without a design decision —
 inflates the case for the article's central proposal. The headline re-anchor benefit falls
 by roughly a third once the defects are corrected.
@@ -38,7 +52,7 @@ silently.
 | V-R1 | Major | `scenarios/regimes.py` carried 7-variable calibrations against the 8-variable state | **RESOLVED 2026-08-22** | No (unreferenced) |
 | **V-F1** | **Major** | The `b_usd` column behind 24 of the 36 FX loadings cannot be reproduced from the committed data | **RESOLVED 2026-08-22** — 17 loadings re-derived | No — all changes within seed noise |
 | V-m1…m7 | Minor | Seven documentation / latent-risk defects | 3 fixed, 4 recorded | No |
-| V-D1…D6 | Design | Six judgement calls, including all five known-open items | Recommendations only | — |
+| V-D1…D7 | Design | Seven judgement calls | Recommendations only; none moves a published number beyond seed noise | — |
 
 ---
 
@@ -586,6 +600,9 @@ FX loadings apply exactly as calibrated. The VAR is stationary, PSD, matches its
 long-run means to within 8bp on seven of eight variables, and neither drifts nor degenerates
 over 65 years. Reproducibility is exact, seeds are now genuinely independent, and N=1000 is
 adequately sampled (medians vary 0.5% between N=400 and N=5000).
+
+*(The closing statement below is the original of 2026-08-21, kept as history — superseded
+by the dated verdict at the top of this report.)*
 
 **What I would stand behind now:** the direction and rough magnitude of the bond-side step
 (iv), which survived every fix within noise in both worlds and is the narrowest, best-tested

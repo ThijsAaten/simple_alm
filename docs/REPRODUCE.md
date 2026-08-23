@@ -188,20 +188,23 @@ reproducible from this repository.
 ## Regenerating Exhibit 6
 
 ```bash
-python -m examples.run_attribution 1000
+python build_exhibit6_participant_wealth.py        # the figure itself (PDF + PNG), N=1000
+python -m examples.run_attribution 1000            # the underlying numbers, printed
 ```
 
-Prints both panels: the four waypoints as levels and as marginal contributions, under the
-no-repression baseline and the EUR financial-repression world (12 years pinned, 3-year transitions).
+`build_exhibit6_participant_wealth.py` is the documented route: it renders both panels
+(the value bridge and the pot distributions) directly from the model, writing to the current
+directory when run from a clone. It is byte-identical with the copy the article project uses.
 
 For the multi-seed standard deviations that should accompany any published figure — levels
 move with the random draw sequence and are not interpretable on a single seed — the per-seed
-record behind the current numbers is committed at `output/validated_attribution.csv`.
+record behind the current numbers is `output/vm7_attribution.csv` / `output/vm7_cgb_dial.csv`.
 
-> **Panel (b), the pot distribution, is not yet publication-ready.** It is a pure dispersion
-> claim, and validation finding **V-M3** (long-bond volatility 22.7% against a plausible
-> 10–15%) is still open. Panel (a), the marginal contributions, is sound. See
-> `docs/VALIDATION_REPORT.md`.
+> **Both panels are publishable** (2026-08-23). Panel (b)'s earlier blocker — V-M3, long-bond
+> volatility of 22.7% against a plausible 10–15% — was resolved on 2026-08-22 by
+> recalibrating the VAR innovation volatilities to realised euro long-yield history
+> (LongGovt now 14.3%), and V-M7's boundary windfall was removed by the ramped transition.
+> See `docs/VALIDATION_REPORT.md`.
 
 ## Verifying the install
 

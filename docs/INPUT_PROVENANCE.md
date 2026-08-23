@@ -40,8 +40,10 @@ participant model consumes is now classified as one of:
 
 **Read that table before reading any exhibit.** Roughly three quarters of the model's
 calibrated inputs are judgement calls, and the single largest unsourced block — the VAR, at
-71 numbers — is also the one validation finding **V-M3** shows to be mis-specified: it
-produces long-bond return volatility of 22.7% against a plausible 10–15%.
+71 numbers — was also the subject of validation finding **V-M3**: as first written it
+produced long-bond return volatility of 22.7% against a plausible 10–15%. Resolved
+2026-08-22 — the innovation volatilities are now anchored to realised euro yield history
+(LongGovt 14.3%) and guarded by tests, though they remain anchored judgement, not estimation.
 
 What *is* evidence-backed is concentrated where the paper's argument lives: the country
 equity return and valuation inputs (Article), and the FX and equity factor loadings
@@ -252,7 +254,7 @@ from data, not taken from the paper, and not cited to a reference calibration. T
 hand-built VAR that produces broadly sensible macro dynamics — simulated long-run means
 match X̄ to within 8bp on seven of eight variables, nothing drifts or explodes over 65 years
 — but the volatilities are demonstrably too high for the bond sleeves that consume them
-(**V-M3**: 22.7% simulated long-bond volatility against a plausible 10–15%).
+(**V-M3**, resolved 2026-08-22: 22.7% simulated long-bond volatility against a plausible 10–15%, since recalibrated to 14.3%).
 
 **If one block of this model should be replaced with estimated parameters before journal
 submission, it is this one.**
