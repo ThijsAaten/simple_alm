@@ -37,10 +37,12 @@ Three blocks:
 `yld` = current nominal 10y yield (mid-2026), used as the sleeve's INITIAL yield.
 `lr` = long-run (reversion-target) yield; omitted means "same as `yld`", i.e. no
 reversion pull. `global_rate_beta` is the EUR-rate pass-through (LOW = decoupled).
-`fx` is the FXModel key. IDR is now a first-class currency (the THB-proxies-IDR
-substitution was retired 2026-08). NZD is still NOT in the model, so AUD proxies
-New Zealand — that substitution REMAINS and is not covered by the FX derivation;
-it needs its own beta before it can be retired the same way.
+`fx` is the FXModel key. Every sovereign now points at its OWN currency: the
+THB-proxies-IDR substitution was retired 2026-08, and the AUD-proxies-NZD
+substitution — the last FX proxy in the model — on 2026-08-23 (V-D5), NZD's
+loadings having been derived from its own EUR-cross history. The measurement
+retroactively showed the AUD proxy was benign (AUD and NZD have near-identical
+EUR-base profiles), but measured is better than assumed.
 
 Only China carries an explicit `lr` distinct from `yld`. Setting the two equal —
 as every other row does — embeds the assumption that today's yield IS the
@@ -60,7 +62,7 @@ BOND_INPUTS = {
     "Australia":   dict(block="dev", within=0.5, yld=0.048, dur=8.0, beta=0.20,
                         idio=0.006, fx="AUD"),
     "NewZealand":  dict(block="dev", within=0.5, yld=0.045, dur=8.0, beta=0.20,
-                        idio=0.007, fx="AUD"),   # PROXY STILL LIVE: AUD stands in for NZD
+                        idio=0.007, fx="NZD"),   # own currency since 2026-08-23 (was AUD proxy; V-D5)
     # ---- EM unrepressed (healthy balance sheets, high real yield) ----
     "Indonesia":   dict(block="em",  within=0.35, yld=0.066, dur=7.0, beta=0.10,
                         idio=0.009, fx="IDR"),   # own currency since 2026-08 (was THB proxy)

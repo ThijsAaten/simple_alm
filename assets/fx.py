@@ -73,7 +73,7 @@ Usage pattern
 
 Supported currencies (EUR is the domestic base)
 ------------------------------------------------
-  USD, GBP, CAD, AUD, CHF, JPY, CNY, HKD, TWD, KRW, SGD, THB, IDR, VND, INR
+  USD, GBP, CAD, AUD, NZD, CHF, JPY, CNY, HKD, TWD, KRW, SGD, THB, IDR, VND, INR
 
 Asian undervaluation thesis
 ----------------------------
@@ -182,45 +182,74 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
         initial_ppp_gap    = -0.05,    # slight undervaluation post-Brexit
         idio_vol           =  0.09,
     ),
-    # TODO(un-derived): CAD is absent from the FX dataset, so no joint
-    #       regression exists for it. commodity currency; growth_loading +0.10 is positive, so it is wrong
-    #       under convention (2) — that +0.10 is global-cycle exposure sitting in the
-    #       euro-growth column, exactly the defect this change fixes elsewhere.
-    #       LEFT AS-IS DELIBERATELY — see the un-derived note below the table.
     "CAD": CurrencyParams(
         carry_spread       =  0.005,
         fx_drift           =  0.000,   # commodity-linked; roughly neutral trend
-        inflation_loading  =  0.20,
-        growth_loading     =  0.10,    # positive: oil-exporter benefits from global growth
+        # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
+        #   b_usd 0.400   residual growth beta +0.259 (t +10.4)
+        # DERIVED 2026-08-23 (V-D5). The old judgement pair was HALF right: 0.20
+        # inflation matches the measurement exactly, but the +0.10 growth loading
+        # was global-cycle exposure sitting in the euro-growth column — the same
+        # defect the 2026-08 rounds fixed everywhere else. The oil/risk-on
+        # exposure the old comment described now lives where it belongs.
+        inflation_loading     =   0.20,   # 0.50 x b_usd
+        growth_loading        =  -0.10,   # -0.30 x b_usd  (EURO growth)
+        global_growth_loading =   0.15,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.10,
         initial_ppp_gap    =  0.00,
         idio_vol           =  0.08,
     ),
-    # TODO(un-derived): AUD is absent from the FX dataset, so no joint
-    #       regression exists for it. same defect as CAD: growth_loading +0.20 is global-cycle exposure in
-    #       the euro-growth column. Its +0.10 inflation_loading also looks like the
-    #       old unreasoned block default.
-    #       LEFT AS-IS DELIBERATELY — see the un-derived note below the table.
     "AUD": CurrencyParams(
         carry_spread       =  0.010,   # RBA historically above ECB
         fx_drift           =  0.000,
-        inflation_loading  =  0.10,
-        growth_loading     =  0.20,    # growth-positive; iron ore & resource exposure
+        # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
+        #   b_usd 0.012   residual growth beta +0.341 (t +11.4)
+        # DERIVED 2026-08-23 (V-D5). From a EUR base the Australian dollar is a
+        # PURE global-cycle currency: essentially zero dollar-tracking
+        # (corr 0.095) and the largest residual cycle beta in the panel. The old
+        # judgement (+0.10 inflation, +0.20 euro-growth) had the magnitude about
+        # right and both columns wrong.
+        inflation_loading     =   0.00,   # 0.50 x b_usd
+        growth_loading        =   0.00,   # -0.30 x b_usd  (EURO growth)
+        global_growth_loading =   0.20,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.10,
         initial_ppp_gap    =  0.00,
         idio_vol           =  0.11,
     ),
-    # TODO(un-derived): CHF is absent from the FX dataset, so no joint
-    #       regression exists for it. PRIORITY. inflation_loading -0.30 contradicts its own comment below
-    #       (which describes CHF GAINING when the EUR weakens) and violates the
-    #       no-negative-loading rule. growth_loading -0.50 is, by contrast, CORRECT
-    #       under convention (2) for a safe haven. Cannot be fixed without a beta.
-    #       LEFT AS-IS DELIBERATELY — see the un-derived note below the table.
+    # ── New Zealand dollar ──────────────────────────────────────────────────
+    # ADDED 2026-08-23 (V-D5), retiring the AUD-proxies-NZD substitution — the
+    # last FX proxy in the model. The measurement retroactively judges the proxy
+    # KIND: AUD and NZD have near-identical profiles from a EUR base (both zero
+    # dollar-beta, both ~+0.20 global-cycle), so the substitution was benign —
+    # but that is now measured rather than assumed.
+    "NZD": CurrencyParams(
+        carry_spread       =  0.012,   # JUDGEMENT: RBNZ historically above RBA's spread to ECB
+        fx_drift           =  0.000,   # JUDGEMENT: commodity currency, neutral trend
+        # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
+        #   b_usd -0.022   residual growth beta +0.301 (t +8.8)
+        inflation_loading     =   0.00,   # 0.50 x b_usd
+        growth_loading        =   0.00,   # -0.30 x b_usd  (EURO growth)
+        global_growth_loading =   0.20,   # 0.60 x residual  (GLOBAL growth)
+        ppp_reversion      =  0.10,    # JUDGEMENT
+        initial_ppp_gap    =  0.00,    # JUDGEMENT
+        idio_vol           =  0.094,   # MEASURED: 9.4% annualised, same sample
+    ),
     "CHF": CurrencyParams(
         carry_spread       = -0.005,   # SNB yields below ECB; negative carry
         fx_drift           =  0.005,   # structural appreciation (current-account surplus)
-        inflation_loading  = -0.30,    # EUR inflation → EUR weakens → CHF gains in EUR terms
-        growth_loading     = -0.50,    # risk-off / EUR slowdown → CHF safe-haven rally
+        # joint regression on [USD EUR-cross, MSCI World EUR], 2001-2026:
+        #   b_usd 0.170   residual growth beta -0.042 (t -1.8)
+        # DERIVED 2026-08-23 (V-D5), calibration/fx_loading_calibration.py.
+        # This retires the LAST NEGATIVE inflation loading in the table: the old
+        # -0.30 contradicted its own comment ("EUR inflation -> EUR weakens ->
+        # CHF gains"), and the data agrees with the comment, not the number —
+        # positive, but small, because the SNB manages CHF against the EUR and
+        # its EUR cross barely tracks the dollar (corr 0.245, vol 6.0%, the
+        # lowest of the panel). The safe-haven bid survives where JPY's does: a
+        # NEGATIVE global-cycle loading.
+        inflation_loading     =   0.10,   # 0.50 x b_usd
+        growth_loading        =  -0.05,   # -0.30 x b_usd  (EURO growth)
+        global_growth_loading =  -0.05,   # 0.60 x residual  (GLOBAL growth)
         ppp_reversion      =  0.10,
         initial_ppp_gap    =  0.00,
         idio_vol           =  0.08,
@@ -424,6 +453,11 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
 #   SGD  0.547  +0.085   +5.9  0.813   0.25   -0.15   +0.05   (0.35/-0.20)
 #   GBP  0.355  +0.119   +4.7  0.483   0.20   -0.10   +0.05   (0.30/-0.20)
 #   JPY  0.686  -0.123   -3.4  0.559   0.35   -0.20   -0.05   (0.20/-0.15)
+#   --- added 2026-08-23, closing V-D5 (previously un-derived / absent): ---
+#   CHF  0.170  -0.042   -1.8  0.245   0.10   -0.05   -0.05   (was -0.30/-0.50)
+#   CAD  0.400  +0.259  +10.4  0.512   0.20   -0.10   +0.15   (was  0.20/+0.10)
+#   AUD  0.012  +0.341  +11.4  0.095   0.00    0.00   +0.20   (was  0.10/+0.20)
+#   NZD -0.022  +0.301   +8.8  0.046   0.00    0.00   +0.20   (new; retires the AUD proxy)
 #
 # THE 0.60 CONVERSION IS THE WEAKEST LINK. b_g is an EQUITY-RETURN beta; the
 # model needs a GROWTH-DEVIATION loading. 0.60 is EquitySleeve's growth_beta,
@@ -463,28 +497,6 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
 #   * every inflation_loading  > 0   (euro-specific debasement lifts all others)
 #   * every growth_loading     < 0   (euro growth strengthens the EUR)
 #   * global_growth_loading is SIGNED and is the ONLY cyclical channel
-#
-# ---------------------------------------------------------------------------
-# UN-DERIVED — CHF, CAD, AUD  (flagged, deliberately unchanged)
-# ---------------------------------------------------------------------------
-# These three are absent from the FX dataset, so no joint regression exists.
-# Each carries at least one value that is wrong by the conventions above:
-#
-#   CHF  inflation_loading -0.30  WRONG (only negative left; contradicts its own
-#                                 comment, which describes CHF gaining as the EUR
-#                                 weakens). growth_loading -0.50 is CORRECT.
-#   CAD  growth_loading    +0.10  WRONG sign under (2); it is global-cycle
-#                                 exposure sitting in the euro-growth column.
-#   AUD  growth_loading    +0.20  same defect; inflation_loading +0.10 also looks
-#                                 like the old unreasoned block default.
-#
-# They are left alone because correcting them without a measured beta would
-# substitute one assertion for another — the precise failure mode this whole
-# exercise exists to remove. CHF is the priority: it appears at 2% weight in
-# main_participant.build_rsp_specs' GlobalEquity sleeve, so it affects the
-# headline participant charts (NOT the attribution or CGB runs, which swap that
-# sleeve for the country mosaic). CAD and AUD: AUD carries the NZD proxy for the
-# bond overlay, so its loadings reach the LHP.
 #
 # ---------------------------------------------------------------------------
 # SAMPLE-PERIOD CHOICE

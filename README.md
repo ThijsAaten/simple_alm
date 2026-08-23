@@ -47,7 +47,7 @@ and each currency as a loading on inflation, euro growth and global growth, appl
 | V-M6 | Provenance — **closed 2026-08-22** by the complete register in `docs/INPUT_PROVENANCE.md` | No |
 | V-M7 | **Resolved 2026-08-22.** The repression window now enters over a 3-year linear ramp; the boundary windfall (+64%/−30% mean years) is gone | No — corrected; repression levels fell ~8% and the record (`output/vm7_*.csv`) reflects it |
 | V-D1 | `global_growth` is calibrated as a GDP variable while the currency loadings on it were derived against equity returns | Small; loadings are 0–0.15 |
-| V-D5 | CHF, CAD and AUD FX loadings are un-derived; CHF's −0.30 inflation loading is the last remaining negative. AUD still proxies NZD in the bond overlay (~1.5% of assets, inside step (iv)) | Expected within seed noise — unmeasured |
+| V-D5 | **Resolved 2026-08-23.** CHF/CAD/AUD derived from the committed Bloomberg legs; NZD added and the AUD-proxies-NZD substitution retired — no FX proxy remains, no negative loading remains | Measured — see `output/vd5_*.csv` vs `vm7_*.csv` |
 | — | A single global equity factor under-fits North Asia: Korea–Taiwan 0.44 against ~0.70 observed. A second regional factor is the natural remedy | Small |
 
 `scenarios/regimes.py` raises `NotImplementedError` — it predates the eight-variable state and was marked unsupported rather than given four sets of unsourced parameters.
@@ -1114,9 +1114,10 @@ ppp_gap_{t+1}  = (1 − ppp_reversion × dt) × ppp_gap_t  +  idio_t
 | SGD | 0.720 | **0.35** | **−0.20** | **0.05** | +0.5 % | +0.5 % | −10 % | 6 % |
 | GBP | 0.596 | **0.30** | **−0.20** | **0.05** | +0.5 % | −0.5 % | −5 % | 9 % |
 | JPY | 0.447 | **0.20** | **−0.15** | **−0.05** | −0.8 % | +0.3 % | −25 % | 9 % |
-| CAD | — | 0.20 | *+0.10* | 0.00 | +0.5 % | 0 % | 0 % | 8 % |
-| AUD | — | 0.10 | *+0.20* | 0.00 | +1.0 % | 0 % | 0 % | 11 % |
-| CHF | — | *−0.30* | −0.50 | 0.00 | −0.5 % | +0.5 % | 0 % | 8 % |
+| CHF | 0.170 | **0.10** | **−0.05** | **−0.05** | −0.5 % | +0.5 % | 0 % | 8 % |
+| CAD | 0.400 | **0.20** | **−0.10** | **+0.15** | +0.5 % | 0 % | 0 % | 8 % |
+| AUD | 0.012 | **0.00** | **0.00** | **+0.20** | +1.0 % | 0 % | 0 % | 11 % |
+| NZD | −0.022 | **0.00** | **0.00** | **+0.20** | +1.2 % | 0 % | 0 % | 9.4 % |
 
 All three **bold** columns come from **one joint regression per currency** (2001–2026, monthly): each currency's EUR-cross log return on `[USD EUR-cross return, MSCI World EUR return]`.  Then
 
@@ -1138,7 +1139,7 @@ global_growth_loading  =  0.60 × b_g (residual)   rounded to 0.05
 >
 > **Joint estimation is what makes the columns consistent.**  The previous round derived `inflation_loading` from a *univariate* regression on the USD, which absorbed shared growth exposure into the dollar coefficient.  Controlling for growth moves several materially: KRW 0.15 → 0.40, IDR 0.30 → 0.50, TWD 0.35 → 0.45, JPY 0.35 → 0.20.  That the two columns could contradict each other at all is a direct consequence of their having been set independently.  `test_model_implied_correlations_match_the_measured_betas` now asserts they cannot.
 >
-> **Open flag — CHF, CAD, AUD are un-derived.**  All three are absent from the FX dataset, so no regression exists.  CHF's `inflation_loading` of −0.30 is the last remaining negative and contradicts its own comment; its `growth_loading` of −0.50 is, by contrast, *correct*.  CAD's +0.10 and AUD's +0.20 growth loadings are global-cycle exposure sitting in the euro-growth column — the same defect, uncorrected.  They are left alone because fixing them without a measured beta substitutes one assertion for another.  CHF is the priority (2 % of the GlobalEquity sleeve, so it reaches the headline participant charts but not the attribution or CGB runs); AUD carries the NZD proxy into the bond overlay.
+> **V-D5 closed (2026-08-23).** CHF, CAD, AUD and NZD are now derived from the Bloomberg legs committed in `data/fx_bloomberg_legs.csv`, and NZD entered the model as a first-class currency, retiring the AUD-proxies-NZD substitution — the last FX proxy.  The data resolved each old anomaly in character: CHF's −0.30 became a measured **+0.10** (its own comment had described positive economics all along), CAD's and AUD's misplaced euro-growth loadings turned out to be global-cycle exposure (+0.15 / +0.20 in the right column), and AUD/NZD emerged as near-identical pure-cycle currencies with essentially zero dollar-tracking — so the retired proxy was benign, which is now measured rather than assumed.
 
 **Asian undervaluation thesis:** JPY, CNY, TWD, KRW, SGD, THB, IDR, VND, and INR all carry a negative `initial_ppp_gap`, encoding the view that they are structurally cheap relative to EUR on PPP terms.  Diversification into Asian assets therefore benefits from both local asset returns and slow (5–12 year) real currency appreciation.
 

@@ -52,10 +52,11 @@ from CSV differ from betas computed from pickle by at most 7.8e-16.
   Taiwan are all present. Indonesia, Vietnam and Singapore are **not** — consistent with those
   three being marked JUDGEMENT in `allocations/country_inputs.py`.
 - **`fx_bloomberg_legs.csv`** supplies the four currencies (IDR, THB, SGD, VND) that
-  `fx_levels.csv` lacks, plus **CHF, CAD, AUD and NZD**. Together the two files now cover
-  every currency the FX loading table needs. **There is still no committed script for the FX
-  loading regression**, so those loadings remain non-reproducible — see
-  `docs/INPUT_PROVENANCE.md`.
+  `fx_levels.csv` lacks, plus **CHF, CAD, AUD and NZD**. Together the two files cover every
+  currency in the model — all sixteen. The loading regression is committed
+  (`calibration/fx_loading_calibration.py`) and reproduces every loading in `assets/fx.py`;
+  the CHF/CAD/AUD/NZD legs closed **V-D5** on 2026-08-23, retiring the AUD-proxies-NZD
+  substitution, the model's last FX proxy.
 
 ## Licensing
 

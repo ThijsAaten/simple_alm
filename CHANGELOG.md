@@ -11,6 +11,24 @@ figures are 5-seed means at N=1000.
 
 ---
 
+## 2026-08-23 — V-D5: the last four currencies derived, the last FX proxy retired
+
+CHF, CAD, AUD and NZD derived by the standard joint regression from the committed
+Bloomberg legs (`data/fx_bloomberg_legs.csv`); NZD added as a first-class currency and the
+AUD-proxies-NZD substitution in the sovereign overlay retired. CHF's −0.30 — the last
+negative inflation loading — became a measured **+0.10** (the data agreed with its own
+comment); CAD's misplaced +0.10 euro-growth loading was global-cycle exposure (+0.15, right
+column); AUD and NZD emerged as near-identical pure-cycle currencies (b_usd ≈ 0, global
++0.20), so the retired proxy was benign — now measured rather than assumed. The model now
+has 16 currencies, zero proxies, zero negative loadings, all three loading columns
+reproducible.
+
+**Moves published numbers: no — measured.** Five seeds, N=1000, `vd5_*` vs `vm7_*`: every
+waypoint within seed noise (largest |t| = 1.1); the bond-side repression step +0.0k. The
+`vd5_*` files become the current exhibit record. Tests remain 48, with the guard-set
+exceptions (`UNDERIVED`, `KNOWN_NEGATIVE_LOADINGS`) now empty.
+
+
 ## 2026-08-22 — Global equity market factor, and two seam repairs
 
 **Closes V-C3.** Equity sleeves had no market factor at all: they carried only macro

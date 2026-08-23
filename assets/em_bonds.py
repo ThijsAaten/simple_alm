@@ -209,8 +209,8 @@ class GovernmentBondSleeve(ChinaGovernmentBondSleeve):
 
     ``fx_key`` sets the (typically unhedged) currency exposure for a EUR-base
     investor; leave None for a EUR-denominated sleeve. Where the FX model lacks
-    a currency (NZD is still missing), pass the documented proxy key (AUD). IDR is
-    no longer proxied - it is a first-class FXModel currency as of 2026-08.
+    a currency, pass the documented proxy key. As of 2026-08-23 no proxy remains:
+    IDR and NZD are both first-class FXModel currencies (V-D5 closed the last one).
     """
 
     def __init__(

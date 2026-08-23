@@ -202,8 +202,8 @@ statements and 10-year benchmark yields, mid-June 2026.
 | Korea | em | 3.7% | 0.15 | KRW | ~1.5% real yield |
 | China (CGB) | managed | 1.8% -> 2.3%* | 0.10 | CNY | capped dial, default 0% |
 
-`*` `FXModel` lacks NZD; **AUD** still proxies NZD (that substitution REMAINS live
-and is not covered by the FX derivation — it needs its own beta). IDR is no longer proxied
+`*` No FX proxy remains (2026-08-23, V-D5): NZD is a first-class currency derived
+from its own EUR-cross history, and IDR is no longer proxied
 (documented in `bond_inputs.py`). All overlay sleeves are held **unhedged** —
 FX-hedging back to EUR would, by covered-interest parity, reintroduce the
 (possibly repressed) EUR base rate.
@@ -420,7 +420,7 @@ The six correlations between the factor and the macro innovations are **Judgemen
 | `beta` for the other five | Judgement | No source |
 | `lr` (long-run yield, China only) | Judgement | 2.3% chosen so the sleeve is not assumed to sit at a cyclical low permanently. Reasoned, not derived |
 | `within`, `dur`, `idio` | Judgement | No source |
-| `fx` | Structural | **AUD still proxies NZD** — that substitution remains live (V-D5) |
+| `fx` | Structural | Every sovereign points at its own currency since 2026-08-23 (V-D5 retired the AUD-proxies-NZD substitution, the last FX proxy) |
 
 ## 5. FX currency parameters — full table
 
@@ -447,7 +447,7 @@ The six correlations between the factor and the macro innovations are **Judgemen
 | Column | Status | Source |
 |---|---|---|
 | `inflation_loading`, `growth_loading`, `global_growth_loading` | **Derived, reproducible** (12 currencies) | One joint regression per currency: EUR-cross monthly log return on `[USD EUR-cross, MSCI World EUR]`, 2001–2026. `0.50 × b_usd`, `−0.30 × b_usd`, `0.60 × residual growth beta`, each rounded to 0.05. Full table and validation in `assets/fx.py` |
-| The same three | Judgement (CHF, CAD, AUD) | **Un-derived** — absent from the FX dataset. CHF's −0.30 inflation loading is the last remaining negative and contradicts its own comment (V-D5) |
+| The same three, plus NZD | **Derived, reproducible** (2026-08-23) | V-D5 closed: derived by the same joint regression once `data/fx_bloomberg_legs.csv` supplied the CHF/CAD/AUD/NZD legs. CHF's former −0.30 became a measured +0.10; AUD and NZD are pure global-cycle currencies (b_usd ≈ 0, +0.20 global) |
 | `idio_vol` for IDR | **Derived** | 11.1% annualised, measured on the same sample |
 | `carry_spread`, `fx_drift`, `ppp_reversion`, `initial_ppp_gap`, `idio_vol` (all others) | Judgement | **No source for any of the 74.** These drive the FX tailwind central to the unhedged-overlay thesis |
 

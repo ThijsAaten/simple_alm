@@ -14,8 +14,11 @@ the defective behaviour: V-C1–V-C3, V-M1, V-M3 (Σ recalibrated to realised eu
 history; LongGovt 14.3%), V-M5, V-M6, V-M7 (ramped repression transition), V-P1, V-R1 and
 V-F1. V-M4 is reduced to hygiene (floor binds 7.1%, pinned); V-M2 is hygiene, masked on
 every exhibit path. The design items V-D1–V-D7 are recommendations; none moves a published
-number beyond seed noise (V-D5, the one item touching a published path, is expected within
-noise but unmeasured). Exhibit 6 is regenerated from this state — both panels, including the
+number beyond seed noise — including V-D5, the one item that touched a published path,
+**resolved and measured 2026-08-23**: CHF/CAD/AUD derived from the committed Bloomberg legs,
+NZD added as a first-class currency retiring the model's last FX proxy, and the before/after
+re-run (`output/vd5_*.csv` vs `vm7_*.csv`) shows every waypoint within seed noise (largest
+|t| = 1.1; the bond-side repression step moved +0.0k). Exhibit 6 is regenerated from this state — both panels, including the
 pot distribution — and the current exhibit record is `output/vm7_*.csv`. The suite stands at
 48 tests, all passing. The verdict below is the original, kept as the record of what was
 found; it described the state of 2026-08-21 and is **superseded**.
@@ -491,7 +494,19 @@ engine either to step or to refuse legibly.
   joint estimates, and does not vary the global column. Flagged in the file. Either
   re-estimate jointly or withdraw the sensitivity; as it stands it is not comparable to the
   headline table.
-- **V-D5 — CHF, CAD, AUD remain un-derived.** Confirmed unresolvable without an FX pull.
+- **V-D5 — CHF, CAD, AUD un-derived; AUD proxies NZD. RESOLVED 2026-08-23.** The FX pull
+  had in fact already been committed (`data/fx_bloomberg_legs.csv` carries the CHF, CAD, AUD
+  and NZD legs), so all four were derived by the standard joint regression: CHF's −0.30 —
+  the last negative inflation loading — became a measured **+0.10** (the data agreed with its
+  own comment, not its number); CAD's misplaced +0.10 euro-growth loading was global-cycle
+  exposure (+0.15, right column); AUD and NZD emerged as near-identical pure-cycle currencies
+  (b_usd 0.012 / −0.022, global +0.20, t = 11.4 / 8.8). NZD entered the model and the
+  AUD-proxies-NZD substitution — the last FX proxy — was retired; the measurement shows the
+  proxy had been benign, which is now known rather than assumed. Measured effect on the
+  exhibits: nothing beyond seed noise (largest |t| = 1.1; bond-side repression +0.0k).
+  16 currencies, zero negative loadings, zero proxies, all three loading columns reproducible
+  by `calibration/fx_loading_calibration.py`. Originally recorded as: "Confirmed unresolvable
+  without an FX pull."
   CHF's `inflation_loading` of −0.30 is the last remaining negative and contradicts its own
   comment. **AUD matters more than its size suggests**: it still proxies NZD in the bond
   overlay, so its `growth_loading` of +0.20 — global-cycle exposure sitting in the

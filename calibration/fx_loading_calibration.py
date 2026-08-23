@@ -54,6 +54,11 @@ PUBLISHED = {
     "IDR": (0.997,  0.217), "INR": (0.938, 0.160), "CNY": (0.933,  0.039),
     "TWD": (0.863,  0.105), "THB": (0.814, 0.103), "KRW": (0.760,  0.262),
     "SGD": (0.720,  0.087), "GBP": (0.596, 0.122), "JPY": (0.447, -0.120),
+    # Added 2026-08-23, closing V-D5. Pinned from this script's first run over
+    # data/fx_bloomberg_legs.csv — CHF/CAD/AUD had no prior published b_usd
+    # (un-derived judgement), and NZD did not exist in the model (AUD proxied it).
+    "CHF": (0.170, -0.042), "CAD": (0.400,  0.259),
+    "AUD": (0.012,  0.341), "NZD": (-0.022, 0.301),
 }
 
 
@@ -127,7 +132,8 @@ if __name__ == "__main__":
                 diffs[col].append(ccy)
     for col in cols:
         d = diffs[col]
-        print(f"  {col:<22} {12 - len(d):>2}/12 agree" +
+        n = len(PUBLISHED)
+        print(f"  {col:<22} {n - len(d):>2}/{n} agree" +
               (f"   DIFFER: {', '.join(d)}" if d else "   (exact)"))
 
     if any(diffs.values()):

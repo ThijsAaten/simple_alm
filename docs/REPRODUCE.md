@@ -179,10 +179,11 @@ and since 2026-08-22 it reproduces **all three** columns exactly — the loading
 `assets/fx.py` were re-derived from it (V-F1 resolved). A test asserts the script and the
 model cannot drift apart.
 
-**Current exhibit record: `output/vm7_attribution.csv`, `output/vm7_cgb_dial.csv`,
-`output/vm7_pot_distributions.csv`**, produced by `python tools/rerun_multiseed.py 1000 vm7`.
-They supersede `output/fx_*.csv`, which remain committed as the previous record. See
-`output/vm7_ramp_summary.md`. Everything in the "Model output" rows above **is** fully
+**Current exhibit record: `output/vd5_attribution.csv`, `output/vd5_cgb_dial.csv`,
+`output/vd5_pot_distributions.csv`**, produced by `python tools/rerun_multiseed.py 1000 vd5`
+(V-D5: CHF/CAD/AUD/NZD derived, the last FX proxy retired). They supersede `output/vm7_*.csv`,
+which remain committed as the previous record; every waypoint moved within seed noise. See
+`output/vd5_derivation_summary.md`. Everything in the "Model output" rows above **is** fully
 reproducible from this repository.
 
 ## Regenerating Exhibit 6
@@ -198,7 +199,7 @@ directory when run from a clone. It is byte-identical with the copy the article 
 
 For the multi-seed standard deviations that should accompany any published figure — levels
 move with the random draw sequence and are not interpretable on a single seed — the per-seed
-record behind the current numbers is `output/vm7_attribution.csv` / `output/vm7_cgb_dial.csv`.
+record behind the current numbers is `output/vd5_attribution.csv` / `output/vd5_cgb_dial.csv`.
 
 > **Both panels are publishable** (2026-08-23). Panel (b)'s earlier blocker — V-M3, long-bond
 > volatility of 22.7% against a plausible 10–15% — was resolved on 2026-08-22 by

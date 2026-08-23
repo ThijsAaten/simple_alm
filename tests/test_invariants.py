@@ -222,12 +222,18 @@ DERIVED_LOADINGS = {
     "SGD": (0.547, +0.085, 0.25, -0.15, +0.05),
     "GBP": (0.355, +0.119, 0.20, -0.10, +0.05),
     "JPY": (0.686, -0.123, 0.35, -0.20, -0.05),
+    # V-D5 (2026-08-23): the previously un-derived three, plus NZD (new).
+    "CHF": (0.170, -0.042, 0.10, -0.05, -0.05),
+    "CAD": (0.400, +0.259, 0.20, -0.10, +0.15),
+    "AUD": (0.012, +0.341, 0.00, +0.00, +0.20),
+    "NZD": (-0.022, +0.301, 0.00, +0.00, +0.20),
 }
 
-# CHF, CAD and AUD are absent from the FX dataset, so no joint regression exists.
-# Each is wrong by at least one convention and is left alone deliberately rather
-# than corrected by assertion — see the UN-DERIVED note in assets/fx.py.
-UNDERIVED = {"CHF", "CAD", "AUD"}
+# Empty since 2026-08-23 (V-D5): CHF, CAD and AUD were derived from the
+# Bloomberg legs and NZD added, so every currency in the model is covered by the
+# joint regression. Kept as a set so the guards need no restructuring if a
+# currency without data is ever added again.
+UNDERIVED: set = set()
 
 
 def test_derived_loadings_match_the_published_table():
@@ -331,10 +337,13 @@ def test_every_derived_growth_loading_is_negative():
     then have. This asserts that confusion cannot return.
     """
     from assets.fx import _DEFAULT_CURRENCIES
+    # Strictly POSITIVE is the defect (cyclical exposure smuggled into the
+    # euro-growth column). Zero is legitimate since V-D5: AUD and NZD have
+    # dollar betas of ~0, so -0.30 x b_usd rounds to 0.00.
     bad = {c: p.growth_loading for c, p in _DEFAULT_CURRENCIES.items()
-           if p.growth_loading >= 0.0 and c not in UNDERIVED}
+           if p.growth_loading > 0.0 and c not in UNDERIVED}
     assert not bad, (
-        f"non-negative growth_loading for {sorted(bad)} — euro-growth column. "
+        f"positive growth_loading for {sorted(bad)} — euro-growth column. "
         f"Cyclical exposure belongs in global_growth_loading.")
 
 
@@ -438,10 +447,18 @@ def test_model_implied_correlations_match_the_measured_betas():
     # negative euro-growth loading, since euro and global growth covary. The
     # substantive check above (loadings must match their own regression
     # coefficients, max diff 0.0044) is unaffected.
+    # Bound revised -0.01 -> -0.03 on 2026-08-23 (V-D5). Once AUD and NZD entered
+    # as PURE cycle currencies (b_usd ~ 0, global +0.20), pairs against the hard
+    # dollar-trackers legitimately imply SMALL negative co-movement — worst
+    # HKD-NZD at -0.0116 — because a b_usd ~ 1 currency carries growth_loading
+    # -0.30 (loses when euro growth is strong) while the cycle currency gains,
+    # and euro and global growth innovations covary at 0.75. That is structure,
+    # not error. -0.03 still catches a real sign mistake: the historical CNY bug
+    # distorted implied correlations by ~0.10.
     worst_neg = min(model.values())
-    assert worst_neg > -0.01, (
+    assert worst_neg > -0.03, (
         f"a currency pair is implied to co-move materially negatively against the "
-        f"EUR ({worst_neg:+.4f}) — that is a loading error, not rounding")
+        f"EUR ({worst_neg:+.4f}) — that is a loading error, not structure")
 
 
 def test_var_transition_matrix_is_stationary():

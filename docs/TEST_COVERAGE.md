@@ -239,15 +239,11 @@ guarded.** Taking the open register item by item:
 | **V-D1** — `global_growth` calibrated as GDP, loadings derived against equity | Design. Currently bounded by loadings of 0 to 0.15. | **No, at current magnitudes** |
 | **V-D2/D3/D4/D6** — `EURO_CYCLE_SHARE` unvalidated; reconstructed test fixture; stale post-2017 table; no sub-annual `dt` | Design and tooling. None is on the path that produces an exhibit. | **No** |
 
-**One correction to the standing understanding.** V-D5 is usually summarised alongside the
-other design items as not reaching an exhibit. That is not quite right: **CHF, CAD and AUD
-are un-derived, and AUD still proxies NZD in the sovereign bond overlay.** Australia and New
-Zealand are 5% each of the overlay, the overlay is 20% of the LHP, and the LHP averages
-~15% of assets over accumulation — so AUD's loadings sit on roughly 1.5% of the portfolio,
-inside published step (iv). AUD also carries `growth_loading = +0.20`, which is the wrong
-sign under the euro-growth convention every derived currency now obeys.
-
-The magnitude is small and it enters through mean-zero deviation terms, so it is very
-probably inside seed noise — but that is an expectation, not a measurement, and it is the
-one open item that is *on* the path to a published figure rather than beside it. It would
-take one comparison run to settle. Everything else above is genuinely off the path.
+**V-D5 — the one item that was on a published path — is resolved and measured
+(2026-08-23).** CHF, CAD and AUD were derived from the committed Bloomberg legs and NZD was
+added as a first-class currency, retiring the AUD-proxies-NZD substitution — the model's last
+FX proxy and, with CHF's −0.30 replaced by its derived +0.10, its last negative loading. The
+comparison run the earlier version of this paragraph called for has been run:
+`output/vd5_*.csv` against `vm7_*.csv`, five seeds, N=1000 — every waypoint within seed
+noise (largest |t| = 1.1), the bond-side repression step +0.0k. Nothing in the register now
+touches a published number, and that is a measurement, not an expectation.
