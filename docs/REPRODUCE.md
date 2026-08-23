@@ -15,7 +15,7 @@
 >
 > | File | Lines | Status |
 > |---|---:|---|
-> | `article/asia_pension_allocation_article_v4_2026-08-22.md` | 1,289 | **live master** (contains §13.11) |
+> | `article/asia_pension_allocation_article_v4_2026-08-23.md` | 1,656 | **live master** (contains §13.11 and the §17 geopolitics section) |
 > | `_archive/asia_pension_allocation_article_v4_2026-08-14.md` | 1,059 | superseded |
 >
 > Superseded versions go to `_archive/` under their own version date. `build_article.sh`
@@ -137,8 +137,8 @@ own scripts, which read its data workbook. To rebuild the PDF once the exhibits 
 in place, from the article project's `article/` directory:
 
 ```bash
-bash build_article.sh asia_pension_allocation_article_v4_2026-08-22      # margin-note build
-bash build_article_faj.sh asia_pension_allocation_article_v4_2026-08-22  # FAJ two-column
+bash build_article.sh asia_pension_allocation_article_v4_2026-08-23      # margin-note build
+bash build_article_faj.sh asia_pension_allocation_article_v4_2026-08-23  # FAJ two-column
 ```
 
 Requires pandoc 3.x, xelatex (TeX Live 2023+), python3. See `docs/INPUT_PROVENANCE.md`
