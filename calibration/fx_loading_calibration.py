@@ -16,6 +16,26 @@ quotes per USD, except EURUSD which is USD per EUR. They are combined here
 explicitly rather than being harmonised in the data files — see data/README.md.
 The EUR-cross return of holding currency c is -dlog(c per EUR).
 
+ROUND 2 (2026-08-24). `calibration/data/bloomberg_pull_VM3_and_FX2_v2_2026-08-24.xlsx`
+(tab FX_round2) supplies DIRECT Bloomberg EUR crosses — EURUSD, EURCHF, EURCAD,
+EURAUD, EURNZD, monthly PX_LAST 2001-01..2026-07, 307 level observations each.
+Bloomberg EURxxx quotes xxx per EUR, i.e. exactly the per-EUR convention of
+fx_levels.csv, so these series enter with NO crossing step; the workbook's
+crossed USD legs (USDCHF = EURCHF/EURUSD = CHF per USD) match the per-USD
+convention of fx_bloomberg_legs.csv and are used only as a cross-check. Both
+directions are ASSERTED in `round2_eur_cross_returns` rather than assumed:
+level anchors pin the quote direction, and the crossed legs are reconciled
+against the committed round-1 legs file. The regression window is the overlap
+with the committed MSCI World series (data/ret_usd.csv ends 2026-04), giving
+n = 302 monthly returns, 2001-03..2026-04.
+
+Round-2 finding (run 2026-08-24): the four round-1 loadings REPRODUCE — b_usd
+within ±0.005, residual betas within ±0.002, every rounded loading identical.
+The pair-direction-inversion hypothesis for the historical CHF sign error is
+NOT supported: the sign error was the pre-derivation judgement value (-0.30
+inflation loading, contradicting its own comment), retired by the V-D5
+derivation at 9c0aa70; the derivation itself was and remains correct.
+
 PIPELINE VALIDATION. This script reproduces four independently published figures
 exactly, which is what establishes that the data and conventions are right:
   * all 11 currency correlations with the USD (to 3dp)
@@ -108,6 +128,60 @@ def _r(v: float) -> float:
     return round(round(v / ROUND) * ROUND, 10)
 
 
+ROUND2_XLSX = ROOT / "calibration" / "data" / "bloomberg_pull_VM3_and_FX2_v2_2026-08-24.xlsx"
+ROUND2_CCYS = ("CHF", "CAD", "AUD", "NZD")
+# (date col, value col) per ticker on the FX_round2 tab, 0-indexed; data from sheet row 4.
+_ROUND2_PAIRS = {"USD": (0, 1), "CHF": (3, 4), "CAD": (6, 7), "AUD": (9, 10), "NZD": (12, 13)}
+
+
+def round2_eur_cross_returns() -> tuple[pd.DataFrame, pd.Series]:
+    """EUR-cross returns from the round-2 direct Bloomberg pulls, conventions asserted."""
+    raw = pd.read_excel(ROUND2_XLSX, sheet_name="FX_round2", header=None, skiprows=3)
+    per_eur = {}
+    for ccy, (dc, vc) in _ROUND2_PAIRS.items():
+        s = pd.Series(pd.to_numeric(raw.iloc[:, vc], errors="coerce").values,
+                      index=pd.to_datetime(raw.iloc[:, dc], errors="coerce")).dropna().sort_index()
+        s.index = s.index.to_period("M").to_timestamp("M")
+        per_eur[ccy] = s
+
+    # CONVENTION ASSERTS — the structural fix for the pair-direction question.
+    # 1. Quote direction pinned by level anchors: in Jan-2001 the euro bought
+    #    ~0.93 USD and ~1.53 CHF. An inverted pull would sit near 1.08 / 0.65.
+    assert 0.8 < per_eur["USD"].iloc[0] < 1.1, "EURUSD must be USD per EUR"
+    assert 1.3 < per_eur["CHF"].iloc[0] < 1.8, "EURCHF must be CHF per EUR"
+    # 2. The implied per-USD legs must reconcile with the committed round-1 legs
+    #    file (per-USD convention). Pull-timing noise only; an inversion fails big.
+    legs = _month_end(pd.read_csv(DATA / "fx_bloomberg_legs.csv", index_col=0, parse_dates=True))
+    for ccy in ROUND2_CCYS:
+        crossed = per_eur[ccy] / per_eur["USD"]                      # (c/EUR)/(USD/EUR) = c per USD
+        dev = (crossed - legs[f"USD{ccy}"]).dropna().abs().max()
+        assert dev < 0.05, f"USD{ccy}: round-2 cross deviates {dev:.4g} from round-1 leg"
+
+    ret = _month_end(pd.read_csv(DATA / "ret_usd.csv", index_col=0, parse_dates=True))
+    X = pd.DataFrame({c: -np.log(s).diff() for c, s in per_eur.items()})
+    world_eur = np.log1p(ret["World"]) + X["USD"]
+    return X, world_eur
+
+
+def calibrate_round2() -> pd.DataFrame:
+    """Same regression as `calibrate`, on the round-2 direct EUR crosses."""
+    X, world = round2_eur_cross_returns()
+    rows = {}
+    for ccy in ROUND2_CCYS:
+        df = pd.concat([X[ccy].rename("y"), X["USD"].rename("usd"), world.rename("w")],
+                       axis=1).dropna()
+        fit = sm.OLS(df["y"], sm.add_constant(df[["usd", "w"]])).fit()
+        b, g = fit.params["usd"], fit.params["w"]
+        rows[ccy] = {
+            "b_usd": b, "resid_g": g, "t_g": fit.tvalues["w"],
+            "inflation_loading": _r(0.50 * b),
+            "growth_loading": _r(-0.30 * b),
+            "global_growth_loading": _r(0.60 * g),
+            "n": len(df),
+        }
+    return pd.DataFrame(rows).T
+
+
 if __name__ == "__main__":
     from assets.fx import _DEFAULT_CURRENCIES as LIVE
 
@@ -135,6 +209,22 @@ if __name__ == "__main__":
         n = len(PUBLISHED)
         print(f"  {col:<22} {n - len(d):>2}/{n} agree" +
               (f"   DIFFER: {', '.join(d)}" if d else "   (exact)"))
+
+    print("\n--- round 2 (2026-08-24): direct EUR crosses vs the round-1 derivation ---")
+    tab2 = calibrate_round2()
+    cols2 = ["inflation_loading", "growth_loading", "global_growth_loading"]
+    moved = []
+    for ccy in ROUND2_CCYS:
+        b2, g2 = tab2.loc[ccy, "b_usd"], tab2.loc[ccy, "resid_g"]
+        b1, g1 = PUBLISHED[ccy]
+        same = all(abs(tab2.loc[ccy, c] - getattr(LIVE[ccy], c)) < 1e-9 for c in cols2)
+        if not same:
+            moved.append(ccy)
+        print(f"  {ccy}: n={int(tab2.loc[ccy,'n'])}  b_usd {b2:+.3f} (round1 {b1:+.3f}, "
+              f"d {b2-b1:+.3f})  resid_g {g2:+.3f} (round1 {g1:+.3f})  "
+              f"rounded loadings {'UNCHANGED' if same else 'CHANGED — REVIEW assets/fx.py'}")
+    print("  =>", "all four round-1 loadings CONFIRMED by the round-2 direct pulls"
+          if not moved else f"loadings moved for: {', '.join(moved)} — do not merge silently")
 
     if any(diffs.values()):
         print("\n--- DISCREPANCY (validation finding V-F1) ---")

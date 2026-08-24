@@ -41,14 +41,20 @@ discrepancy and **leaves `assets/fx.py` untouched** — rewriting 17 live loadin
 decision, not a side effect of running a calibration. Recorded as **V-F1** in
 `docs/VALIDATION_REPORT.md`.
 
-The same file would also support closing two open items — see `docs/VALIDATION_REPORT.md`:
+The same file also closed two items on 2026-08-23 — see `docs/VALIDATION_REPORT.md`:
 
-- **V-D5**: CHF, CAD and AUD loadings are un-derived, and CHF's −0.30 `inflation_loading` is
-  the last remaining negative in the table, contradicting its own inline comment.
-- The **AUD-proxies-NZD** substitution in the bond overlay, the last live FX proxy.
+- **V-D5** (closed): CHF, CAD and AUD loadings were un-derived, and CHF's −0.30
+  `inflation_loading` was the last remaining negative in the table, contradicting its own
+  inline comment. All four (incl. NZD) are now derived by the same joint regression.
+- The **AUD-proxies-NZD** substitution in the bond overlay, the last live FX proxy (retired).
 
-Neither is attempted here. Both would change published numbers and are decisions for the
-repository owner, not consequences of a data conversion.
+**FX round 2 (2026-08-24).** `data/bloomberg_pull_VM3_and_FX2_v2_2026-08-24.xlsx` supplies
+direct Bloomberg EUR crosses for CHF/CAD/AUD/NZD (no crossing step). The round-2 section of
+`fx_loading_calibration.py` re-derives the four loadings from it with quote-direction and
+crossed-leg conventions asserted in code: b_usd within ±0.005 of round 1, every rounded
+loading identical — the V-D5 values are confirmed. The same workbook's `Bund_yields` tab
+feeds `check_bond_vol_history_v2.py`, the canonical V-M3 check (PASS, near-boundary;
+independent recomputation in `vm3_fx2_verification_2026-08-24.md`).
 
 ## Related tooling
 

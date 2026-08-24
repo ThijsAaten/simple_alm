@@ -347,6 +347,31 @@ def test_every_derived_growth_loading_is_negative():
         f"Cyclical exposure belongs in global_growth_loading.")
 
 
+def test_round2_loading_signs_match_economic_priors():
+    """FX round 2 (2026-08-24) sign guards for CHF, CAD, AUD, NZD.
+
+    Each assertion states an economic prior the derived loading must respect,
+    so a future re-derivation with a pair-direction inversion (the failure
+    mode suspected — and ruled out — in the round-2 check) trips a test
+    instead of flipping a sign silently. The pre-V-D5 CHF judgement of -0.30
+    inflation_loading is exactly the defect the first assertion catches.
+    """
+    from assets.fx import _DEFAULT_CURRENCIES as C
+    # CHF: euro inflation weakens the EUR, so CHF GAINS vs EUR — inflation
+    # loading must be positive (small: the SNB manages CHF against the EUR).
+    assert C["CHF"].inflation_loading > 0.0, "CHF inflation_loading sign error"
+    # CHF: safe haven — appreciates when the GLOBAL cycle weakens, like JPY.
+    assert C["CHF"].global_growth_loading < 0.0, "CHF must keep the safe-haven sign"
+    # CAD: commodity / risk-on currency — appreciates with the global cycle.
+    assert C["CAD"].global_growth_loading > 0.0, "CAD must load positively on global cycle"
+    # AUD, NZD: from a EUR base, PURE global-cycle currencies — positive global
+    # loading, and dollar betas ~0 so both euro-column loadings sit at zero.
+    for ccy in ("AUD", "NZD"):
+        assert C[ccy].global_growth_loading > 0.0, f"{ccy} must load positively on global cycle"
+        assert C[ccy].inflation_loading == 0.0 and C[ccy].growth_loading == 0.0, \
+            f"{ccy} is a pure global-cycle currency; euro-column loadings must be 0"
+
+
 def test_loading_columns_imply_the_same_dollar_beta():
     """THE TEST THAT WOULD HAVE CAUGHT THE ORIGINAL ERROR.
 

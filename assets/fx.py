@@ -459,6 +459,12 @@ _DEFAULT_CURRENCIES: dict[str, CurrencyParams] = {
 #   AUD  0.012  +0.341  +11.4  0.095   0.00    0.00   +0.20   (was  0.10/+0.20)
 #   NZD -0.022  +0.301   +8.8  0.046   0.00    0.00   +0.20   (new; retires the AUD proxy)
 #
+#   CONFIRMED 2026-08-24 (FX round 2): the four V-D5 rows re-derived from
+#   direct Bloomberg EUR crosses (EURCHF/EURCAD/EURAUD/EURNZD, 2001-01..2026-07,
+#   n=302 regression months) reproduce b_usd within +/-0.005 and every rounded
+#   loading exactly. calibration/fx_loading_calibration.py, round-2 section;
+#   data in calibration/data/bloomberg_pull_VM3_and_FX2_v2_2026-08-24.xlsx.
+#
 # THE 0.60 CONVERSION IS THE WEAKEST LINK. b_g is an EQUITY-RETURN beta; the
 # model needs a GROWTH-DEVIATION loading. 0.60 is EquitySleeve's growth_beta,
 # used as the conversion factor, so the chain is:
