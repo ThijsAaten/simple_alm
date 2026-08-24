@@ -302,11 +302,11 @@ submission, it is this one.**
 | Variable | Annualised σ | Status |
 |---|---:|---|
 | `short_rate` | 0.0080 | Judgement |
-| `long_rate` | 0.0070 | Judgement, anchored (V-M3, 2026-08-22): targets annual-change sd of long euro yields 60–90bp; 10y Bund 1999–2025 ≈ 85bp incl. 2022 / ≈ 70bp excl.; 30y lower. Level factor is the ∞-maturity limit. Was 0.0120. **Pending:** verify against GDBR10 / GDBR30 annual changes from Bloomberg |
-| `real_rate` | 0.0065 | Judgement, anchored (V-M3): long euro real yields (OATei/Bundei) show similar annual-change dispersion on a shorter record. Was 0.0100 |
+| `long_rate` | 0.0070 | Sourced (V-M3, verified 2026-08-24): sd of year-end changes in GDBR30 Index 1998-2025 = 79.72bp incl-2022 / 64.99bp excl-2022, against the pre-registered band 60–80bp — PASS, near-boundary (0.28bp inside the band top). Model annual-change sd 73bp from Φ, Σ at `8f01503` sits between the two realised figures. 10y 85.87bp incl-2022 / 66.67bp excl. File `calibration/data/bloomberg_pull_VM3_and_FX2_v2_2026-08-24.xlsx`, script `calibration/check_bond_vol_history_v2.py`; independent out-of-repo recomputation in `calibration/vm3_fx2_verification_2026-08-24.md`. Was 0.0120 |
+| `real_rate` | 0.0065 | Judgement, anchored (V-M3): long euro real yields (OATei/Bundei) show similar annual-change dispersion on a shorter record. Was 0.0100. Secondary observation (2026-08-24, no pre-registered band, recorded not adjudicated): sd Δreal 74.8bp on 15 usable consecutive-year pairs of a gap-ridden linker series, vs the 65bp innovation |
 | `inflation` | 0.0080 | Judgement |
 | `growth` | 0.0250 | Judgement |
-| `credit_spread` | 0.0045 | Judgement, anchored (V-M3): euro IG OAS annual changes ≈ 50bp; 45bp innovation at φ = 0.65 reproduces this. Was 0.0060 |
+| `credit_spread` | 0.0045 | Judgement, anchored (V-M3): euro IG OAS annual changes ≈ 50bp; 45bp innovation at φ = 0.65 reproduces this. Was 0.0060. Secondary observation (2026-08-24, no pre-registered band, recorded not adjudicated): sd ΔOAS (LECPOAS) 103.8bp full sample / 57.7bp ex-2008-09, vs model ≈49bp annual-change — conservative against GFC-scale regimes, roughly in line ex-GFC |
 | `curvature` | 0.0080 | Judgement |
 | `global_growth` | 0.0200 | Judgement |
 
