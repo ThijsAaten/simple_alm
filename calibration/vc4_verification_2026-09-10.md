@@ -111,6 +111,94 @@ The corrected series necessarily starts 2001-04 (the translation consumes one mo
 history); the inverted series started 2001-03. 301 vs 302 months — immaterial to any
 figure above.
 
+## Addendum (same day): Table 4, Table 5 and the §8.1/§8.3 prose correlations
+
+These descend from the same series but had no committed builder and were missing from the
+consumer list above. Now covered by `exhibits/scripts/build_table4_correlations.py`
+(article repo, uncommitted with the rest). Validation against the old (inverted) series
+reproduces the published Table 4 and §8.1 figures to within 0.01 (rounding), the full
+Table 5 within 0.01–0.02, and pins down two method details: the published matrix was
+computed on **simple returns, not the log returns the caption states** (simple: max error
+0.005; log: up to 0.026) on the n=301 first-row-dropped sample, and two §8.3 prose
+figures (the Japan/Korea/Taiwan "0.65–0.90 range", India "0.88 in 2013") were chart-read
+approximations that the computed old series does not exactly reproduce (0.52–0.93 and
+0.82). Adopting the correction should fix the caption too.
+
+### Table 4, old → new (lower triangle; every pair falls)
+
+| Pair (vs) | USA | Europe | Japan | AsiaExJP | EM | China | India | Korea |
+|---|---|---|---|---|---|---|---|---|
+| Europe | 0.93→0.80 | | | | | | | |
+| Japan | 0.80→0.64 | 0.84→0.61 | | | | | | |
+| Asia ex-Japan | 0.83→0.64 | 0.86→0.70 | 0.78→0.57 | | | | | |
+| EM | 0.86→0.67 | 0.90→0.76 | 0.81→0.59 | 0.98→0.96 | | | | |
+| China | 0.69→0.42 | 0.73→0.49 | 0.67→0.38 | 0.88→0.78 | 0.86→0.75 | | | |
+| India | 0.72→0.53 | 0.75→0.58 | 0.70→0.50 | 0.82→0.71 | 0.83→0.72 | 0.67→0.46 | | |
+| Korea | 0.78→0.61 | 0.80→0.67 | 0.75→0.57 | 0.91→0.85 | 0.89→0.83 | 0.68→0.50 | 0.70→0.55 | |
+| Taiwan | 0.77→0.62 | 0.77→0.60 | 0.69→0.48 | 0.90→0.84 | 0.87→0.79 | 0.69→0.51 | 0.68→0.52 | 0.82→0.73 |
+
+Direction: **every correlation falls**, by 0.02 (EM–AxJ) to 0.29 (Japan–Europe, China–
+Japan). Mechanism: the inverted translation applied one identical FX factor to every
+series the wrong way round, injecting a large common component that inflated all
+cross-correlations; the correct translation's FX term is partly idiosyncratic to the
+dollar leg and partly offsets equity comovement.
+
+### §8.1 prose figures, old → new, direction per number
+
+| Prose figure | Old | New | Direction |
+|---|---|---|---|
+| USA–Europe | 0.93 | 0.80 | falls — and now sits BELOW the USD-base 0.86, not above it |
+| Japan–Europe | 0.84 | 0.61 | falls |
+| Asia exJ–Europe | 0.86 | 0.70 | falls |
+| China–Europe | 0.73 | 0.49 | falls |
+| India–Europe | 0.75 | 0.58 | falls |
+| Taiwan–Europe | 0.77 | 0.60 | falls |
+| China–India | 0.67 | 0.46 | falls |
+| China–Korea | 0.68 | 0.50 | falls |
+| China–Taiwan | 0.69 | 0.51 | falls |
+
+Two prose consequences beyond the numbers, stated rather than absorbed. (i) §8.1's causal
+sentence — EUR-translation "adds a common currency factor that USD-base correlations
+strip out", explaining why 0.93 exceeds the practitioner 0.85 — **inverts**: under the
+correct translation the EUR-base USA–Europe correlation (0.80) sits *below* the USD-base
+(0.86), because the FX term adds partly-offsetting noise to the USD leg. (ii) The claim
+that adding U.S. exposure gives a European portfolio "approximately no diversification
+benefit" rested on 0.93; at 0.80 it needs softening. The *relative* claim — the gain is
+concentrated in specific Asian markets (China 0.49, India 0.58 vs USA 0.80) — survives
+and strengthens: the China–USA gap widens from 0.20 to 0.31.
+
+### Table 5 (regime rows, China and headline columns; full grid in the script output)
+
+| Regime | USA old→new | AsiaExJP old→new | China old→new |
+|---|---|---|---|
+| Full sample | 0.93→0.80 | 0.86→0.70 | 0.73→0.49 |
+| Post-GFC 2010–19 | 0.93→0.70 | 0.89→0.64 | 0.82→0.56 |
+| Post-pandemic 2021–26 | 0.87→0.70 | 0.79→0.51 | 0.55→0.10 |
+| GFC Sep08–Mar09 | 0.99→0.79 | 0.99→0.98 | 0.97→0.88 |
+| Eurozone Jul11–Sep12 | 0.98→0.80 | 0.95→0.79 | 0.92→0.73 |
+| China shock Jul15–Mar16 | 0.99→0.99 | 0.85→0.75 | 0.82→0.69 |
+| COVID Jan–Sep20 | 0.97→0.95 | 0.91→0.84 | 0.81→0.65 |
+| Fed shock 2022 | 0.92→0.85 | 0.80→0.46 | 0.48→**−0.09** |
+
+Direction: every cell falls or holds. The §8.2 narrative survives — Western-origin stress
+still correlates Asia up (AxJ 0.98 in the GFC) — but its numbers change materially, and
+the "most striking decoupling observation" sharpens: China–Europe in 2022 goes from 0.48
+to **−0.09**, actually negative. One nuance: GFC-window USA–Europe falls to 0.79 (from
+0.99), so "every market 0.93–0.99 in the GFC" no longer holds for the USA — that sentence
+needs its range recomputed.
+
+### §8.3 prose figures, old → new
+
+| Figure | Old (published) | Old (computed) | New | Direction |
+|---|---|---|---|---|
+| USA–Europe rolling band 2006–26 | 0.86–0.97 | 0.86–0.97 | 0.54–0.90 | band shifts down and widens — "fortress that does not decouple" weakens |
+| Japan/Korea/Taiwan range | 0.65–0.90 | 0.52–0.93 | 0.20–0.84 | falls (published range was a chart approximation) |
+| China rolling, 2014 → latest | 0.87 → 0.55 | 0.86 → 0.55 | 0.43 → 0.13 | both ends fall; the decade-long decline survives at a lower level |
+| India rolling, 2013 → latest | 0.88 → 0.68 | 0.82 → 0.68 | 0.52 → 0.33 | both ends fall; pattern survives |
+
+Exhibit 3 (`rolling_corr_60m` / `build_exhibit3_rolling_corr.py`) descends from the same
+translation and needs regenerating with the same correction — added to the consumer list.
+
 ## 3. Status
 
 - Fresh-path verification: **confirmed inverted** — V-C4 substantiated.
