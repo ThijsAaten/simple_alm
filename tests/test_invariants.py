@@ -372,6 +372,42 @@ def test_round2_loading_signs_match_economic_priors():
             f"{ccy} is a pure global-cycle currency; euro-column loadings must be 0"
 
 
+def test_w811_vol_variant_leaves_committed_calibration_unchanged():
+    """The W8.11 +3pp Asian-vol run is a RUN-CONFIG OVERRIDE, never a calibration
+    edit: building the perturbed specs must leave COUNTRY_INPUTS and the
+    committed calibration hash untouched, and must raise each Asian sleeve's
+    TOTAL volatility by exactly 3pp while leaving non-Asian sleeves alone."""
+    import copy
+    import numpy as np
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "tools"))
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "examples"))
+    from run_w811_sensitivity import bump_asian_vol, calib_hash, VOL_BUMP
+    from run_equity_only import rsp_specs_with_mosaic
+    from allocations import PROPOSED_EQUITY
+    from allocations.country_inputs import COUNTRY_INPUTS, ASIA
+    from scenarios.engine import EQUITY_FACTOR_VOL
+
+    snapshot = copy.deepcopy(COUNTRY_INPUTS)
+    h0 = calib_hash()
+    plain = {s.sleeve.name: s.sleeve.idio_vol
+             for s in rsp_specs_with_mosaic(PROPOSED_EQUITY)
+             if hasattr(s.sleeve, "market_beta")}
+    bumped = bump_asian_vol(rsp_specs_with_mosaic(PROPOSED_EQUITY))
+    for s in bumped:
+        name = getattr(s.sleeve, "name", None)
+        if name not in plain:
+            continue
+        mkt = s.sleeve.market_beta * EQUITY_FACTOR_VOL
+        t0 = np.sqrt(mkt ** 2 + plain[name] ** 2)
+        t1 = np.sqrt(mkt ** 2 + s.sleeve.idio_vol ** 2)
+        want = VOL_BUMP if name in ASIA else 0.0
+        assert abs((t1 - t0) - want) < 1e-9, f"{name}: total vol moved {t1-t0:+.4f}, want {want}"
+    assert calib_hash() == h0, "calibration hash changed — the override mutated committed state"
+    assert COUNTRY_INPUTS == snapshot, "COUNTRY_INPUTS mutated by the variant build"
+
+
 def test_loading_columns_imply_the_same_dollar_beta():
     """THE TEST THAT WOULD HAVE CAUGHT THE ORIGINAL ERROR.
 

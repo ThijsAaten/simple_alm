@@ -1,0 +1,22 @@
+# W8.11 variant: Asian equity sleeve total vol +3pp (idio override; ASIA set incl. Japan) | commit 107c0d6 | N=1000 | seeds=[42, 137, 271, 314, 577] | calib sha256 757c97b15a855a75 unchanged
+step,world,seed,level
+(i)   Current,baseline,42,1235.872
+(iv)  +Bond side,baseline,42,1363.857
+(i)   Current,repression,42,882.959
+(iv)  +Bond side,repression,42,1009.792
+(i)   Current,baseline,137,1230.321
+(iv)  +Bond side,baseline,137,1363.994
+(i)   Current,repression,137,884.861
+(iv)  +Bond side,repression,137,1007.281
+(i)   Current,baseline,271,1241.325
+(iv)  +Bond side,baseline,271,1381.957
+(i)   Current,repression,271,903.831
+(iv)  +Bond side,repression,271,1025.26
+(i)   Current,baseline,314,1246.773
+(iv)  +Bond side,baseline,314,1368.383
+(i)   Current,repression,314,889.658
+(iv)  +Bond side,repression,314,1013.38
+(i)   Current,baseline,577,1264.663
+(iv)  +Bond side,baseline,577,1391.257
+(i)   Current,repression,577,901.365
+(iv)  +Bond side,repression,577,1023.309
