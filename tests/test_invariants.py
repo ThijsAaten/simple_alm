@@ -372,6 +372,37 @@ def test_round2_loading_signs_match_economic_priors():
             f"{ccy} is a pure global-cycle currency; euro-column loadings must be 0"
 
 
+def test_eur_translation_damps_usa_equity_vol():
+    """V-C4 regression: correct EUR translation must DAMP USA equity vol.
+
+    For a EUR investor, r_eur = (1+r_usd) * (u_{t-1}/u_t) - 1 with u = USD per
+    EUR. The dollar tends to strengthen in equity selloffs, so over any long
+    sample the EUR-translated vol of the USA sleeve must come out BELOW its USD
+    vol. The inverted factor (u_t/u_{t-1}) — the defect found in the article-
+    side ret_eur series on 2026-09-10 — produces vol ~5pp ABOVE the USD vol
+    and fails this test. Tolerance: the margin is small (~0.3pp on this
+    sample), so the assertion is directional only, plus a hard ceiling that
+    the inverted construction (>19%) cannot pass.
+    """
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path as _Path
+    root = _Path(__file__).resolve().parents[1]
+    ret = pd.read_csv(root / "data" / "ret_usd.csv", index_col=0, parse_dates=True)
+    fx = pd.read_csv(root / "data" / "fx_levels.csv", index_col=0, parse_dates=True)
+    for df in (ret, fx):
+        df.index = pd.to_datetime(df.index).to_period("M").to_timestamp("M")
+    u = fx["USD"].reindex(ret.index).astype(float)
+    assert 0.8 <= u.min() and u.max() <= 1.6, "EURUSD level anchor breached"
+    r_eur = ((1.0 + ret["USA"]) * (u.shift(1) / u) - 1.0).dropna()
+    vol_eur = r_eur.std(ddof=1) * np.sqrt(12)
+    vol_usd = ret["USA"].dropna().std(ddof=1) * np.sqrt(12)
+    assert vol_eur < vol_usd, (
+        f"EUR-translated USA vol {vol_eur:.1%} >= USD vol {vol_usd:.1%} — "
+        "translation direction inverted (V-C4)")
+    assert vol_eur < 0.19, f"USA EUR vol {vol_eur:.1%} in the inverted regime (V-C4)"
+
+
 def test_w811_vol_variant_leaves_committed_calibration_unchanged():
     """The W8.11 +3pp Asian-vol run is a RUN-CONFIG OVERRIDE, never a calibration
     edit: building the perturbed specs must leave COUNTRY_INPUTS and the
