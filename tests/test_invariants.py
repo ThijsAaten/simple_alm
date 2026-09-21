@@ -372,6 +372,27 @@ def test_round2_loading_signs_match_economic_priors():
             f"{ccy} is a pure global-cycle currency; euro-column loadings must be 0"
 
 
+def test_allocations_match_canonical_2026_09_21():
+    """B1 reconciliation guard: the participant model must run the CANONICAL
+    allocation vectors ruled on 2026-09-21 (the section-11 implementation, 6%
+    China cap). The canonical file lives in the article repository
+    (replication/data/canonical_allocation_2026-09-21.csv); the weights are
+    restated here verbatim so the two repositories cannot drift apart silently.
+    """
+    from allocations import CURRENT_EQUITY, PROPOSED_EQUITY
+    canonical_benchmark = {"USA": 0.60, "Europe": 0.15, "Japan": 0.10,
+                           "China": 0.055, "India": 0.04, "Taiwan": 0.03,
+                           "Korea": 0.015, "Indonesia": 0.010}
+    canonical_proposed = {"USA": 0.37, "Europe": 0.20, "Japan": 0.12,
+                          "Korea": 0.075, "India": 0.065, "China": 0.06,
+                          "Taiwan": 0.045, "Indonesia": 0.045,
+                          "Vietnam": 0.01, "Singapore": 0.01}
+    assert CURRENT_EQUITY == canonical_benchmark, "benchmark drifted from canonical"
+    assert PROPOSED_EQUITY == canonical_proposed, "Proposed A drifted from canonical"
+    assert abs(sum(canonical_benchmark.values()) - 1.0) < 1e-9
+    assert abs(sum(canonical_proposed.values()) - 1.0) < 1e-9
+
+
 def test_eur_translation_damps_usa_equity_vol():
     """V-C4 regression: correct EUR translation must DAMP USA equity vol.
 
