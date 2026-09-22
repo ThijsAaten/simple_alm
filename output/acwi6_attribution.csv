@@ -1,0 +1,42 @@
+# Nested attribution, per seed (EUR000 real pot at retirement) | commit e402850 | N=1000 | seeds=[42, 137, 271, 314, 577] | post V-M3 bond-volatility recalibration
+step,world,seed,level,marginal_delta
+(i)   Current,baseline,42,1205.971,
+(ii)  +Re-anchor,baseline,42,1340.433,134.461
+(iii) +China cap,baseline,42,1341.498,1.066
+(iv)  +Bond side,baseline,42,1374.603,33.105
+(i)   Current,repression,42,864.266,
+(ii)  +Re-anchor,repression,42,964.199,99.932
+(iii) +China cap,repression,42,963.242,-0.956
+(iv)  +Bond side,repression,42,1014.476,51.234
+(i)   Current,baseline,137,1204.558,
+(ii)  +Re-anchor,baseline,137,1331.686,127.129
+(iii) +China cap,baseline,137,1336.33,4.644
+(iv)  +Bond side,baseline,137,1370.303,33.973
+(i)   Current,repression,137,862.532,
+(ii)  +Re-anchor,repression,137,958.119,95.587
+(iii) +China cap,repression,137,960.505,2.386
+(iv)  +Bond side,repression,137,1014.31,53.804
+(i)   Current,baseline,271,1209.793,
+(ii)  +Re-anchor,baseline,271,1355.962,146.169
+(iii) +China cap,baseline,271,1355.389,-0.573
+(iv)  +Bond side,baseline,271,1388.906,33.517
+(i)   Current,repression,271,887.206,
+(ii)  +Re-anchor,repression,271,979.608,92.402
+(iii) +China cap,repression,271,979.426,-0.181
+(iv)  +Bond side,repression,271,1030.002,50.575
+(i)   Current,baseline,314,1218.412,
+(ii)  +Re-anchor,baseline,314,1344.579,126.167
+(iii) +China cap,baseline,314,1349.526,4.947
+(iv)  +Bond side,baseline,314,1381.003,31.477
+(i)   Current,repression,314,869.96,
+(ii)  +Re-anchor,repression,314,966.149,96.189
+(iii) +China cap,repression,314,965.683,-0.466
+(iv)  +Bond side,repression,314,1019.223,53.54
+(i)   Current,baseline,577,1231.453,
+(ii)  +Re-anchor,baseline,577,1368.781,137.329
+(iii) +China cap,baseline,577,1373.253,4.471
+(iv)  +Bond side,baseline,577,1405.779,32.526
+(i)   Current,repression,577,882.087,
+(ii)  +Re-anchor,repression,577,978.576,96.489
+(iii) +China cap,repression,577,979.521,0.946
+(iv)  +Bond side,repression,577,1030.712,51.19
