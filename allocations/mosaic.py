@@ -117,10 +117,14 @@ def build_equity_specs(weights, seed=1, hedge_developed=0.5, growth_mode="euro")
 # developed non-European non-Japanese (AU/NZ/IL/HK/SG) -> Europe; non-modelled
 # EM (2.30%) renormalised away pro-rata. Sourcing and construction in the
 # article repo: replication/data/acwi_benchmark_2026-08-31.csv.
+# Revised 2026-09-22 (singapore-panel): Singapore broken out of the Europe
+# fold at its raw ACWI weight (MSCI Singapore factsheet cap, 31 Aug 2026);
+# Hong Kong remains the one Asian developed market folded into Europe (flagged).
 CURRENT_EQUITY = {
-    "USA": 0.682071, "Europe": 0.167969,
+    "USA": 0.682071, "Europe": 0.163869,
     "Japan": 0.052097, "China": 0.025028, "India": 0.013655,
     "Taiwan": 0.033306, "Korea": 0.025295, "Indonesia": 0.000579,
+    "Singapore": 0.004100,
 }
 
 # The pre-B5-0 benchmark, retained as an explicitly STYLISED comparator only:

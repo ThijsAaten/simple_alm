@@ -384,10 +384,12 @@ def test_allocations_match_canonical_2026_09_21():
     # B5-0 (2026-09-22): benchmark = MSCI ACWI at 31 Aug 2026, mapped to the
     # modelled lines; source of truth in the article repo,
     # replication/data/acwi_benchmark_2026-08-31.csv.
-    canonical_benchmark = {"USA": 0.682071, "Europe": 0.167969,
+    # revised 2026-09-22 (singapore-panel): Singapore its own benchmark line
+    canonical_benchmark = {"USA": 0.682071, "Europe": 0.163869,
                            "Japan": 0.052097, "China": 0.025028,
                            "India": 0.013655, "Taiwan": 0.033306,
-                           "Korea": 0.025295, "Indonesia": 0.000579}
+                           "Korea": 0.025295, "Indonesia": 0.000579,
+                           "Singapore": 0.004100}
     canonical_proposed = {"USA": 0.37, "Europe": 0.20, "Japan": 0.12,
                           "Korea": 0.075, "India": 0.065, "China": 0.06,
                           "Taiwan": 0.045, "Indonesia": 0.045,
