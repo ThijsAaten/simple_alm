@@ -112,7 +112,22 @@ def build_equity_specs(weights, seed=1, hedge_developed=0.5, growth_mode="euro")
 # ---- Canonical allocations (equity sleeve = 100%) ----
 # CURRENT: approximate MSCI-ACWI-benchmarked Dutch equity sleeve.
 # Asia (incl Japan) ~ 25% but cap-weighted: Japan 10, China ~5, India ~4, TWN ~3, KOR ~2, INDO ~1
+# B5-0 (ruled 2026-09-22): the benchmark is MSCI ACWI, weights as of 31 Aug 2026
+# (official MSCI factsheets), mapped to the modelled lines: Canada -> USA;
+# developed non-European non-Japanese (AU/NZ/IL/HK/SG) -> Europe; non-modelled
+# EM (2.30%) renormalised away pro-rata. Sourcing and construction in the
+# article repo: replication/data/acwi_benchmark_2026-08-31.csv.
 CURRENT_EQUITY = {
+    "USA": 0.682071, "Europe": 0.167969,
+    "Japan": 0.052097, "China": 0.025028, "India": 0.013655,
+    "Taiwan": 0.033306, "Korea": 0.025295, "Indonesia": 0.000579,
+}
+
+# The pre-B5-0 benchmark, retained as an explicitly STYLISED comparator only:
+# "a European fund that has already taken part of the step". It is sourced to
+# nothing because it claims nothing about any real fund; used to report the
+# secondary tracking error (2.83%) alongside the primary ACWI one.
+STYLISED_TILTED_EQUITY = {
     "USA": 0.60, "Europe": 0.15,
     "Japan": 0.10, "China": 0.055, "India": 0.04, "Taiwan": 0.03,
     "Korea": 0.015, "Indonesia": 0.010,
