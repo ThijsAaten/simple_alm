@@ -45,3 +45,34 @@ CSVs (numpy-2 pickles unreadable under the pinned environment).
 Pot-to-income conversion: none used anywhere — Exhibit 6 is a real-pot comparison
 (entry-year euros); documented in the README per the referee's note that a pot
 comparison suffices absent institution-specific income claims.
+
+---
+
+## B2 FREEZE — 2026-10-13
+
+Frozen on the reconciled numbers after the six-query verification round
+(`calibration/oct13_queries_b2_freeze_2026-10-13.md`). Pins:
+
+- Article repo: tag `b2-freeze-2026-10-13` (master `asia_pension_allocation_article_v4_2026-10-13c.md`).
+- Model repo (this repo, public): tag `b2-freeze-2026-10-13`; suite 52 tests.
+- Seeds: attribution [42, 137, 271, 314, 577]; CGB dial [42, 137, 271]; N=1000;
+  event-study placebo seed 20260909; SeedSequence composition
+  `default_rng([base_seed, domain, offset])`.
+- Panel: `build_ret_eur.py` with EURUSD level anchors and the frozen Singapore
+  series anchors (18.48% EUR / 20.35% USD) asserted.
+
+The frozen state must reproduce, from a clean clone via
+`bash replication/run_all.sh` (article repo, `SIMPLE_ALM` pointing at a clone of
+this repo), every portfolio statistic the article publishes:
+
+| Statistic | Frozen value |
+|---|---|
+| Benchmark ER / vol / Sharpe | 4.88% / 14.3% / 0.340 |
+| Proposal ER / vol / Sharpe | 5.85% / 14.6% / 0.40 (4dp in script output) |
+| Advantage | 96.91bp (prints 97) |
+| Ex-ante tracking error | 3.67% |
+| Information ratio | 0.26 |
+| No-reversion pair / IR | 6.16% / 6.49%, IR 0.09 |
+| A6 legs (Eur / Jpn / AxJ) | 0.11 / 0.14 / 0.72 (pp) |
+| Within-Asia selection | 14.2bp |
+| China cap: ER cost / portfolio-vol cost | 2.3bp / 26.4bp |
